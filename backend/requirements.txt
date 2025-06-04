@@ -1,0 +1,72 @@
+# backend/requirements.txt
+
+# Django Core
+Django>=4.2,<5.0 # LTS version as of mid-2023, check current LTS
+djangorestframework>=3.14,<3.16
+django-cors-headers>=4.0,<4.4
+python-dotenv>=1.0,<1.1 # For .env file loading
+
+# Authentication
+django-allauth>=0.58,<0.62 # Check latest stable version
+
+# Celery (Async Tasks)
+celery>=5.3,<5.4
+redis>=5.0,<5.1 # For Celery broker/result backend (or use amqp for RabbitMQ)
+django-celery-results>=2.5,<2.6 # For storing Celery results in Django DB
+django-celery-beat>=2.5,<2.6 # For periodic tasks
+
+# Database Connector (MySQL)
+mysqlclient>=2.1,<2.3 # Or other connectors like PyMySQL if preferred
+
+# HTTP Requests (for calling external APIs)
+requests>=2.31,<2.32
+
+# AI / ML / NLP / CV Libraries
+spacy>=3.7,<3.8
+# After installing spacy, download models: python -m spacy download en_core_web_sm
+sentence-transformers>=2.6,<2.8 # For text embeddings
+nltk>=3.8,<3.9 # For tokenization, stopwords (used by TranscriptAnalyzer)
+gensim>=4.3,<4.4 # For topic modeling (LDA)
+scikit-learn>=1.3,<1.5 # Used by Gensim, and potentially for other ML tasks
+tensorflow>=2.15,<2.17 # Or tensorflow-cpu if no GPU. Check compatibility.
+# keras # Keras is now part of TensorFlow (tf.keras)
+imagehash>=4.3,<4.4 # For perceptual image hashing
+opencv-python-headless>=4.8,<4.10 # OpenCV for image/video processing (headless for servers)
+Pillow>=10.0,<10.3 # Image processing library, often a dependency
+
+# Video Processing (Visual Analyzer & AI Video Editor)
+moviepy>=1.0.3,<1.1 # For video editing
+yt-dlp>=2023.12.30 # For downloading videos/transcripts (replaces youtube-dl)
+pyscenedetect[opencv]>=0.6,<0.7 # For scene detection (ensure OpenCV is compatible)
+# librosa>=0.10,<0.11 # For advanced audio processing if needed by editor (can be large)
+# pydub>=0.25,<0.26 # For simpler audio manipulation if needed
+
+# Vector Database Client (Qdrant example)
+qdrant-client>=1.7,<1.9 # Check latest stable
+
+# Web Scraping (Scrapy and dependencies)
+Scrapy>=2.11,<2.12
+# Scrapy might pull in other dependencies like Twisted, lxml, etc.
+# Add specific scraper helper libraries if used, e.g.:
+# scrapy-user-agents (if using for rotating user agents)
+# scrapy-playwright or scrapy-selenium (if needing browser automation)
+
+# Date/Time utilities
+python-dateutil>=2.8,<2.10 # For robust date parsing
+
+# Production Web Server (choose one, e.g., Gunicorn for WSGI)
+gunicorn>=21.0,<22.0
+# For ASGI (if using Channels or advanced ASGI features):
+# daphne>=4.0,<4.2
+# uvicorn>=0.27,<0.30 # Can also run ASGI apps
+
+# Static file serving in production (if not using CDN/Nginx directly for static)
+whitenoise[brotli]>=6.6,<6.7 # Brotli extra is optional but good
+
+# Optional: For monitoring/debugging
+# flower>=2.0,<2.1 # Celery monitoring tool
+# django-debug-toolbar>=4.2,<4.4 # For Django debugging in browser (dev only)
+
+# Ensure versions are compatible. Use `pip freeze > requirements.txt` from a
+# working virtual environment to capture exact versions.
+# Periodically update dependencies and test thoroughly.
