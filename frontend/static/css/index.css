@@ -1,1 +1,56 @@
+/* frontend/static/css/index.css */
 
+/* Import Google Fonts if needed, or define in HTML head */
+/* @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap'); */
+
+body {
+    /* font-family: 'Inter', sans-serif; /* Example if using Inter */
+    /* Additional global styles for the landing page if Tailwind doesn't cover them */
+    scroll-behavior: smooth;
+}
+
+/* Example: Custom styles for a specific element not easily handled by Tailwind */
+.hero-gradient-text {
+    background: linear-gradient(to right, #8B5CF6, #EC4899); /* Indigo to Pink */
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text; /* Standard property */
+    text-fill-color: transparent; /* Standard property */
+}
+
+/* Styling for Plyr.js if custom overrides are needed for demo player */
+/* .plyr--video { ... } */
+
+/* Ensure images in demo results are well-behaved if not covered by Tailwind */
+#try-papri .grid img {
+    max-height: 12rem; /* Example max height for demo thumbnails */
+    object-fit: cover; /* Ensure image covers the area without distortion */
+}
+
+/* FAQ accordion transition (can also be done with Alpine.js x-transition more smoothly) */
+/* If using x-collapse from Alpine, these might not be needed or could conflict */
+/*
+.faq-answer {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease-out;
+}
+.faq-answer.open {
+    max-height: 500px; /* Adjust as needed */
+/* transition: max-height 0.5s ease-in; */
+/* }
+*/
+
+/* You can add more specific styles here if Tailwind utility classes become too verbose
+   or for complex selectors. However, try to leverage Tailwind as much as possible. */
+
+/* Example: Styling for the trial blocked state if opacity/cursor isn't enough */
+/*
+.trial-blocked input,
+.trial-blocked button {
+    background-color: #4B5563 !important; /* Tailwind gray-600 */
+/* border-color: #374151 !important; /* Tailwind gray-700 */
+/* color: #9CA3AF !important; /* Tailwind gray-400 */
+/* cursor: not-allowed !important;
+}
+*/
