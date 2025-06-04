@@ -1,1 +1,109 @@
+/* frontend/static/css/papriapp.css */
 
+/* @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap'); */
+
+body {
+    /* font-family: 'Inter', sans-serif; */
+    /* Global styles for the app, if any */
+}
+
+/* Sidebar specific styles if needed beyond Tailwind */
+/* .sidebar { ... } */
+/* .active-nav-link was defined in papriapp.html <style> for quick access,
+   but could be moved here for better organization */
+/*
+.active-nav-link {
+    background-color: #374151; /* Tailwind gray-700
+    color: #F9FAFB; /* Tailwind gray-50
+    border-left: 3px solid #6366F1; /* Indigo-500
+    padding-left: calc(1.5rem - 3px); /* Adjust padding for border
+}
+*/
+
+/* Custom scrollbar styles (optional, browser support varies) */
+/* For Webkit browsers like Chrome, Safari */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+::-webkit-scrollbar-track {
+    background: #2D3748; /* Tailwind gray-800 */
+}
+::-webkit-scrollbar-thumb {
+    background: #4A5568; /* Tailwind gray-600 */
+    border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: #718096; /* Tailwind gray-500 */
+}
+
+/* Styling for Plyr.js video player if custom overrides are needed */
+/* e.g., for modal player or editor preview player */
+/*
+#modal-video-player, #edited-video-player {
+    max-height: 70vh;
+}
+.plyr--video {
+    border-radius: 0.5rem; /* Example: rounded corners for player */
+/* box-shadow: 0 4px 15px rgba(0,0,0,0.2); */
+/* }
+*/
+
+/* Search result cards - if specific overrides are needed */
+/* .search-result-card { ... } */
+
+/* Ensure form elements within the app have consistent styling if not fully covered by Tailwind */
+/* input[type="text"], input[type="url"], input[type="email"], input[type="number"], input[type="date"], textarea, select {
+    background-color: #374151; /* Tailwind gray-700 */
+/* border: 1px solid #4B5568; /* Tailwind gray-600 */
+/* color: #F9FAFB; /* Tailwind gray-50 */
+/* border-radius: 0.375rem; /* Tailwind rounded-md */
+/* padding: 0.5rem 0.75rem;
+}
+input:focus, textarea:focus, select:focus {
+    border-color: #6366F1; /* Tailwind indigo-500 */
+/* ring: 1px solid #6366F1; */
+/* box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.5); */
+/* }
+*/
+
+/* Modal styles (overlay, content box) - Tailwind handles much of this with utility classes */
+/*
+.modal-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-color: rgba(17, 24, 39, 0.8); /* Tailwind gray-900 with opacity */
+/* z-index: 50;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.modal-content {
+    background-color: #1F2937; /* Tailwind gray-800 */
+/* padding: 1.5rem; */
+/* border-radius: 0.5rem; */
+/* box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04); */
+/* max-width: 90%; */
+/* max-height: 90vh; */
+/* overflow-y: auto;
+}
+*/
+
+/* Custom spinner styles if not using Tailwind's animate-spin directly */
+/*
+.spinner {
+    border: 4px solid rgba(255, 255, 255, 0.3);
+    border-left-color: #6366F1; /* Indigo-500 */
+/* border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    animation: spin 1s linear infinite;
+}
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+*/
+
+/* Adjust file input button styling if needed */
+/* This can be tricky as file inputs are hard to style consistently.
+   Tailwind's `file:` variant helps a lot. */
