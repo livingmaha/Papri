@@ -1,183 +1,193 @@
 // frontend/static/js/index.js
 
-// Alpine.js component for the Demo Section
 document.addEventListener('alpine:init', () => {
     Alpine.data('papriDemo', () => ({
-        trialSearchesLeft: 3, // Initial trial searches
+        trialSearchesLeft: 3,
         trialBlocked: false,
         queryText: '',
         queryImage: null,
         queryImageName: '',
         demoResults: [],
         demoLoading: false,
-        demoError: '',
-        maxDemoSearches: 3, // Should match the display
+        demoError: false, // Changed to boolean
+        demoStatusMessage: '', // For user feedback
+        maxDemoSearches: 3,
+
+        // Curated demo scenarios
+        curatedDemos: {
+            1: { 
+                queryText: "Recipe for delicious Spanish Paella", 
+                queryImage: null,
+                queryImageName: '', 
+                mockResults: [
+                    { id: 'cd1_res1', title: 'Authentic Spanish Paella Recipe (Demo)', platform_name: 'YouTube', uploader_name: 'CookingMaster', duration_str: '15:22', publication_date_str: '2024-03-10', description: 'Learn to make delicious seafood paella. PAPRI finds specific recipes easily!', thumbnail_url: 'https://source.unsplash.com/random/400x225/?paella,food&sig=1', original_url: '#' },
+                    { id: 'cd1_res2', title: 'Quick Paella for Beginners (Demo)', platform_name: 'Vimeo', uploader_name: 'EasyMeals', duration_str: '08:05', publication_date_str: '2024-02-15', description: 'A simplified paella recipe perfect for weeknights. PAPRI finds videos for all skill levels.', thumbnail_url: 'https://source.unsplash.com/random/400x225/?rice,dish&sig=2', original_url: '#' }
+                ]
+            },
+            2: { 
+                queryText: "How to fix a common leaky kitchen faucet", 
+                queryImage: null,
+                queryImageName: '',
+                mockResults: [
+                    { id: 'cd2_res1', title: 'DIY: Fix Leaky Faucet in 5 Min (Demo)', platform_name: 'PeerTube', uploader_name: 'HomeFixIt', duration_str: '05:10', publication_date_str: '2023-11-20', description: 'Step-by-step guide to fixing a common leaky faucet. PAPRI finds practical tutorials quickly.', thumbnail_url: 'https://source.unsplash.com/random/400x225/?faucet,repair&sig=3', original_url: '#' }
+                ]
+            },
+            3: { // Image-focused demo
+                queryText: "Beautiful sunset over mountains", // Optional accompanying text
+                queryImageName: "simulated_sunset.jpg", // Display name for simulated image
+                queryImage: true, // Flag to indicate image component for mock generation
+                mockResults: [
+                    { id: 'cd3_res1', title: 'Mountain Sunset Timelapse (Visual Match Demo)', platform_name: 'Dailymotion', uploader_name: 'ScenicViews', duration_str: '03:45', publication_date_str: '2024-01-05', description: 'Stunning timelapse found by PAPRI based on visual similarity to a sunset image.', thumbnail_url: 'https://source.unsplash.com/random/400x225/?sunset,mountains&sig=4', original_url: '#' },
+                    { id: 'cd3_res2', title: 'Painting a Mountain Sunset - Art Tutorial (Demo)', platform_name: 'YouTube', uploader_name: 'ArtCreator', duration_str: '22:10', publication_date_str: '2023-12-12', description: 'PAPRI also brings text-relevant results like this art tutorial for "sunset".', thumbnail_url: 'https://source.unsplash.com/random/400x225/?painting,landscape&sig=5', original_url: '#' }
+                ]
+            }
+        },
 
         init() {
-            // Load trial count from localStorage
             const storedTrials = localStorage.getItem('papriDemoTrialsLeft');
             if (storedTrials !== null) {
                 this.trialSearchesLeft = parseInt(storedTrials, 10);
             }
             this.checkTrialStatus();
-            
-            // Populate with some initial placeholder "trending" or example results
-            this.populateInitialDemoResults();
+            // No initial demo results on load, user must click a demo or search
         },
 
         checkTrialStatus() {
             if (this.trialSearchesLeft <= 0) {
                 this.trialBlocked = true;
-                this.trialSearchesLeft = 0; // Ensure it doesn't go negative on display
+                this.trialSearchesLeft = 0; 
             } else {
                 this.trialBlocked = false;
             }
         },
+        
+        useTrial(){
+            if(this.trialSearchesLeft > 0 && !this.trialBlocked) {
+                this.trialSearchesLeft--;
+                localStorage.setItem('papriDemoTrialsLeft', this.trialSearchesLeft.toString());
+                this.checkTrialStatus();
+                return true; // Trial used
+            }
+            this.checkTrialStatus(); // Re-check in case it was already 0
+            if(this.trialBlocked){
+                 this.demoStatusMessage = "Demo search limit reached. Please sign up for full access.";
+                 this.demoError = true;
+            }
+            return false; // Trial not used or limit reached
+        },
 
         handleFileSelect(event) {
             if (event.target.files.length > 0) {
-                this.queryImage = event.target.files[0];
+                this.queryImage = event.target.files[0]; // Store File object for potential real upload
                 this.queryImageName = this.queryImage.name;
             } else {
                 this.queryImage = null;
                 this.queryImageName = '';
             }
         },
+        
+        runCuratedDemo(demoId) {
+            if (!this.useTrial()) return; // Checks trial limit and decrements if available
 
-        performDemoSearch() {
-            if (this.trialBlocked) {
-                this.demoError = "Demo search limit reached. Please sign up for full access.";
+            const demoData = this.curatedDemos[demoId];
+            if (!demoData) {
+                this.demoStatusMessage = "Selected demo scenario not found.";
+                this.demoError = true;
                 return;
             }
+
+            this.queryText = demoData.queryText || ''; // Set query text for display/potential real search
+            // For curated demos, we don't actually use queryImage File object, just simulate
+            this.queryImageName = demoData.queryImageName || ''; 
+            this.queryImage = null; // Clear any actual selected file for curated demo
+
+            this.demoLoading = true;
+            this.demoResults = [];
+            this.demoError = false;
+            this.demoStatusMessage = `Running curated demo: "${this.queryText || this.queryImageName}"...`;
+            
+            setTimeout(() => { // Simulate API call delay
+                this.demoLoading = false;
+                this.demoResults = demoData.mockResults;
+                if (this.demoResults.length > 0) {
+                    this.demoStatusMessage = `Showing results for curated demo: "${this.queryText || this.queryImageName}".`;
+                } else {
+                     this.demoStatusMessage = "Simulated: No results found for this curated demo.";
+                     this.demoError = true;
+                }
+            }, 1200); 
+        },
+        
+        performDemoSearch() {
+            if (!this.useTrial()) return; // Checks trial limit
+
             if (!this.queryText.trim() && !this.queryImage) {
-                this.demoError = "Please enter a text query or select an image.";
+                this.demoStatusMessage = "Please enter a text query or select an image for custom search.";
+                this.demoError = true;
                 return;
             }
 
             this.demoLoading = true;
             this.demoResults = [];
-            this.demoError = '';
+            this.demoError = false;
+            this.demoStatusMessage = 'Performing your custom demo search...';
 
-            // Decrement trial count
-            this.trialSearchesLeft--;
-            localStorage.setItem('papriDemoTrialsLeft', this.trialSearchesLeft.toString());
-            this.checkTrialStatus();
-
-            // Simulate API call
-            setTimeout(() => {
+            setTimeout(() => { // Simulate API call delay
                 this.demoLoading = false;
-                if (this.queryText.toLowerCase().includes("error")) {
-                    this.demoError = "Simulated error: Could not process your demo request.";
-                } else if (this.queryText.toLowerCase().includes("no result")) {
-                    this.demoResults = []; // Show no results
+                if (this.queryText.toLowerCase().includes("error_test_case")) {
+                    this.demoStatusMessage = "Simulated error: Could not process your custom demo request.";
+                    this.demoError = true;
+                } else if (this.queryText.toLowerCase().includes("no_match_custom_test")) {
+                    this.demoResults = [];
+                    this.demoStatusMessage = "Simulated: No results found for your custom query.";
                 } else {
-                    // Generate mock results based on query or image
-                    this.demoResults = this.generateMockResults(this.queryText, this.queryImageName);
+                    this.demoResults = this.generateMockResultsForCustomSearch(this.queryText, this.queryImageName);
+                     if (this.demoResults.length === 0) {
+                        this.demoStatusMessage = "Simulated: No results found for your custom query.";
+                    } else {
+                        this.demoStatusMessage = "Displaying mock results for your custom search.";
+                    }
                 }
             }, 1500);
         },
-        
-        populateInitialDemoResults() {
-            // These could be fetched from a static JSON or hardcoded examples
-             this.demoResults = [
-                {
-                    id: 'demo1',
-                    title: 'Exploring Ancient Ruins in Greece (Demo)',
-                    platform_name: 'YouTube',
-                    uploader_name: 'TravelExplorer',
-                    duration_str: '12:35',
-                    publication_date_str: '2024-05-10',
-                    description: 'A breathtaking journey through historical sites and ancient wonders of Greece. This is a sample result for the Papri demo.',
-                    thumbnail_url: 'https://source.unsplash.com/random/400x225?ruins,greece', // Placeholder
-                    original_url: '#'
-                },
-                {
-                    id: 'demo2',
-                    title: 'The Art of Wildlife Photography (Demo)',
-                    platform_name: 'Vimeo',
-                    uploader_name: 'NatureLens',
-                    duration_str: '08:17',
-                    publication_date_str: '2024-04-22',
-                    description: 'Learn tips and tricks for capturing stunning wildlife photos. This demonstrates Papri\'s diverse content discovery.',
-                    thumbnail_url: 'https://source.unsplash.com/random/400x225?wildlife,camera', // Placeholder
-                    original_url: '#'
-                }
-            ];
-        },
 
-        generateMockResults(query, imageName) {
-            const baseResults = [
-                {
-                    id: 'mock1',
-                    title: `Search result for "${query || 'your query'}" (Demo)`,
-                    platform_name: 'YouTube',
-                    uploader_name: 'Demo Channel',
-                    duration_str: '05:30',
-                    publication_date_str: '2024-01-15',
-                    description: `This is a simulated search result. Papri's AI would find much more relevant content across many platforms. Image searched: ${imageName || 'None'}.`,
-                    thumbnail_url: 'https://source.unsplash.com/random/400x225?technology',
-                    original_url: '#'
-                },
-                {
-                    id: 'mock2',
-                    title: `Another finding for "${query || 'your topic'}" (Demo)`,
-                    platform_name: 'PeerTube',
-                    uploader_name: 'OpenContentOrg',
-                    duration_str: '15:00',
-                    publication_date_str: '2023-11-02',
-                    description: 'Deep dive into the subject matter you searched for, demonstrating Papri finding niche content.',
-                    thumbnail_url: 'https://source.unsplash.com/random/400x225?nature',
-                    original_url: '#'
-                }
-            ];
-            if (imageName) {
-                 baseResults.push({
-                    id: 'mock_img',
-                    title: `Visual match for ${imageName} (Demo)`,
-                    platform_name: 'Dailymotion',
-                    uploader_name: 'VisualSearcher',
-                    duration_str: '02:10',
-                    publication_date_str: '2024-03-01',
-                    description: 'This video was found based on visual similarity to your uploaded image. PAPRI can search by screenshot!',
-                    thumbnail_url: 'https://source.unsplash.com/random/400x225?abstract',
-                    original_url: '#'
-                 });
-            }
-            // Simple filter: if query includes 'cat', add a cat video
-            if (query && query.toLowerCase().includes('cat')) {
-                baseResults.unshift({
-                    id: 'mock_cat',
-                    title: 'Funny Cat Antics (Demo Special for "cat" query!)',
-                    platform_name: 'YouTube',
-                    uploader_name: 'CatLover101',
-                    duration_str: '03:45',
-                    publication_date_str: '2024-06-01',
-                    description: 'A collection of hilarious cat moments found by PAPRI because you searched for cats!',
-                    thumbnail_url: 'https://source.unsplash.com/random/400x225?cat,funny',
-                    original_url: '#'
+        generateMockResultsForCustomSearch(query, imageName) {
+            const results = [];
+            const baseDesc = `This is a PAPRI demo result for your query "${query}". Image used: ${imageName || 'None'}.`;
+            results.push({ 
+                id: `custom_mock_${Date.now()}_1`, 
+                title: `Custom Search: Finding for "${query || 'Image Search'}" (Demo)`, 
+                platform_name: 'YouTube', uploader_name: 'Demo Creator', 
+                duration_str: '07:42', publication_date_str: '2024-05-01', 
+                description: baseDesc, 
+                thumbnail_url: `https://source.unsplash.com/random/400x225/?${query.split(" ")[0] || 'abstract'}&sig=${Date.now()}`, 
+                original_url: '#' 
+            });
+            if (Math.random() > 0.5) { // Randomly add a second result
+                 results.push({ 
+                    id: `custom_mock_${Date.now()}_2`, 
+                    title: `Another Result for "${query}" (Demo)`, 
+                    platform_name: 'Vimeo', uploader_name: 'Demo Engine', 
+                    duration_str: '03:15', publication_date_str: '2024-04-15', 
+                    description: `More insights from PAPRI's powerful demo search. ${baseDesc}`, 
+                    thumbnail_url: `https://source.unsplash.com/random/400x225/?${query.split(" ").pop() || 'technology'}&sig=${Date.now()+1}`, 
+                    original_url: '#' 
                 });
             }
-            return baseResults.slice(0, Math.floor(Math.random() * 2) + 1); // Return 1 or 2 results randomly
+            return results;
         }
     }));
 
-    // FAQ Accordion (already handled by Alpine.js x-data="{ openFAQ: null }" in HTML)
-    // Mobile menu toggle (already handled by Alpine.js x-data="{ isMobileMenuOpen: false }" in HTML)
-});
-
-// Smooth scrolling for anchor links (optional, CSS scroll-behavior is often enough)
-document.querySelectorAll('a[href^="#"]').forEach(anchor => {
-    anchor.addEventListener('click', function (e) {
-        const hrefAttribute = this.getAttribute('href');
-        // Ensure it's not just a hash for Alpine.js navigation within the page itself
-        if (hrefAttribute.length > 1 && document.querySelector(hrefAttribute)) { 
-            e.preventDefault();
-            document.querySelector(hrefAttribute).scrollIntoView({
-                behavior: 'smooth'
-            });
-        }
+    // Smooth scrolling for anchor links
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+        anchor.addEventListener('click', function (e) {
+            const hrefAttribute = this.getAttribute('href');
+            if (hrefAttribute.length > 1 && document.querySelector(hrefAttribute)) { 
+                e.preventDefault();
+                document.querySelector(hrefAttribute).scrollIntoView({ behavior: 'smooth' });
+            }
+        });
     });
 });
 
-// Initialize Plyr.js for any video players on the landing page if needed (e.g., in a "How it Works" video)
-// const player = new Plyr('#player_id_on_landing_page'); // Example
+console.log("Papri Index JS (refined) loaded.");
