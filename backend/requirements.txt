@@ -21,6 +21,9 @@ mysqlclient>=2.1,<2.3 # Or other connectors like PyMySQL if preferred
 # HTTP Requests (for calling external APIs)
 requests>=2.31,<2.32
 
+# API Security
+django-ratelimit>=4.0,<4.1 # For API rate limiting (check latest compatible version)
+
 # AI / ML / NLP / CV Libraries
 spacy>=3.7,<3.8
 # After installing spacy, download models: python -m spacy download en_core_web_sm
@@ -67,6 +70,7 @@ whitenoise[brotli]>=6.6,<6.7 # Brotli extra is optional but good
 # flower>=2.0,<2.1 # Celery monitoring tool
 # django-debug-toolbar>=4.2,<4.4 # For Django debugging in browser (dev only)
 
-# Ensure versions are compatible. Use `pip freeze > requirements.txt` from a
+# Ensure versions are compatible.
+# Use `pip freeze > requirements.txt` from a
 # working virtual environment to capture exact versions.
 # Periodically update dependencies and test thoroughly.
