@@ -24,7 +24,6 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'django.contrib.sites',
-
     'rest_framework',
     'corsheaders',
     'allauth',
@@ -33,8 +32,7 @@ INSTALLED_APPS = [
     'allauth.socialaccount.providers.google',
     'django_celery_results',
     'django_celery_beat',
-    'django_ratelimit', # ADDED
-
+    'django_ratelimit',
     'api.apps.ApiConfig',
     'ai_agents.apps.AiAgentsConfig',
     'payments.apps.PaymentsConfig',
@@ -51,7 +49,6 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'allauth.account.middleware.AccountMiddleware',
-    # 'django_ratelimit.middleware.RatelimitMiddleware', # Global ratelimit middleware (optional)
 ]
 
 ROOT_URLCONF = 'papri_project.urls'
@@ -174,7 +171,6 @@ CELERY_TASK_ROUTES = {
     'api.tasks.process_video_edit_task': {'queue': 'video_editing'},
 }
 
-# --- BEGIN: Rate Limiting Configuration ---
 RATELIMIT_ENABLE = os.getenv('DJANGO_RATELIMIT_ENABLE', 'True') == 'True'
 RATELIMIT_USE_CACHE = 'default'
 RATELIMIT_KEY_PREFIX = 'rl'
@@ -182,21 +178,18 @@ RATELIMIT_VIEW = 'django_ratelimit.exceptions.ratelimited'
 RATELIMIT_BLOCK = True
 RATELIMIT_GLOBAL_DEFAULT_RATE = os.getenv('DJANGO_RATELIMIT_GLOBAL_DEFAULT_RATE', '1000/h')
 
-# Define keying functions
 def user_or_ip_key(group, request):
-    if request.user.is_authenticated:
-        return f"user:{request.user.pk}"
+    if request.user.is_authenticated: return f"user:{request.user.pk}"
     return f"ip:{request.META.get('REMOTE_ADDR')}"
-
-def ip_key(group, request):
-    return request.META.get('REMOTE_ADDR')
+def ip_key(group, request): return request.META.get('REMOTE_ADDR')
 
 RATELIMIT_DEFAULTS = {
-    'api_search_initiate': os.getenv('RATELIMIT_API_SEARCH_INITIATE', '20/m'), # Increased from 10/m
-    'api_edit_task_create': os.getenv('RATELIMIT_API_EDIT_TASK_CREATE', '10/h'), # Increased from 5/h
-    'api_general_read': os.getenv('RATELIMIT_API_GENERAL_READ', '300/m'), # Increased from 200/m
-    'auth_actions': os.getenv('RATELIMIT_AUTH_ACTIONS', '30/m'), # Increased from 20/m
-    'payments_initiate': os.getenv('RATELIMIT_PAYMENTS_INITIATE', '10/h'), # Increased from 5/h
+    'api_search_initiate': os.getenv('RATELIMIT_API_SEARCH_INITIATE', '20/m'),
+    'api_edit_task_create': os.getenv('RATELIMIT_API_EDIT_TASK_CREATE', '10/h'),
+    'api_general_read': os.getenv('RATELIMIT_API_GENERAL_READ', '300/m'),
+    'auth_actions': os.getenv('RATELIMIT_AUTH_ACTIONS', '30/m'),
+    'payments_initiate': os.getenv('RATELIMIT_PAYMENTS_INITIATE', '10/h'),
+    'paystack_webhook': os.getenv('RATELIMIT_PAYSTACK_WEBHOOK', '60/m'), # Rate limit for incoming webhooks per IP
 }
 RATELIMIT_KEYS = {
     'api_search_initiate': user_or_ip_key,
@@ -204,9 +197,8 @@ RATELIMIT_KEYS = {
     'api_general_read': ip_key,
     'auth_actions': ip_key,
     'payments_initiate': user_or_ip_key,
+    'paystack_webhook': ip_key, # Key webhooks by IP
 }
-# --- END: Rate Limiting Configuration ---
-
 
 CORS_ALLOW_CREDENTIALS = True
 if DEBUG:
@@ -237,12 +229,15 @@ VIMEO_CLIENT_ID = os.getenv('VIMEO_CLIENT_ID')
 VIMEO_CLIENT_SECRET = os.getenv('VIMEO_CLIENT_SECRET')
 VIMEO_ACCESS_TOKEN = os.getenv('VIMEO_ACCESS_TOKEN')
 DAILYMOTION_API_URL = os.getenv('DAILYMOTION_API_URL', 'https://api.dailymotion.com')
+
 PAYSTACK_SECRET_KEY = os.getenv('PAYSTACK_SECRET_KEY')
 PAYSTACK_PUBLIC_KEY = os.getenv('PAYSTACK_PUBLIC_KEY')
+PAYSTACK_WEBHOOK_SECRET = os.getenv('PAYSTACK_WEBHOOK_SECRET') # ADDED for webhook signature verification
 PAYSTACK_CALLBACK_URL_NAME = 'payments:paystack_callback'
 PAYMENT_SUCCESS_REDIRECT_URL = os.getenv('PAYMENT_SUCCESS_REDIRECT_URL', '/app/#payment-success')
 PAYMENT_FAILED_REDIRECT_URL = os.getenv('PAYMENT_FAILED_REDIRECT_URL', '/app/#payment-failed')
 SIGNUP_CODE_EXPIRY_DAYS = int(os.getenv('SIGNUP_CODE_EXPIRY_DAYS', 7))
+
 QDRANT_HOST = os.getenv('QDRANT_HOST', 'localhost')
 QDRANT_PORT = int(os.getenv('QDRANT_PORT', 6333))
 QDRANT_GRPC_PORT = int(os.getenv('QDRANT_GRPC_PORT', 6334))
@@ -254,15 +249,18 @@ QDRANT_TRANSCRIPT_COLLECTION_NAME = os.getenv('QDRANT_TRANSCRIPT_COLLECTION_NAME
 QDRANT_VISUAL_COLLECTION_NAME = os.getenv('QDRANT_VISUAL_COLLECTION_NAME', 'papri_visuals_v1')
 TEXT_EMBEDDING_DIMENSION = int(os.getenv('TEXT_EMBEDDING_DIMENSION', 384))
 IMAGE_EMBEDDING_DIMENSION = int(os.getenv('IMAGE_EMBEDDING_DIMENSION', 1280))
+
 SENTENCE_TRANSFORMER_MODEL = os.getenv('SENTENCE_TRANSFORMER_MODEL', 'all-MiniLM-L6-v2')
 VISUAL_CNN_MODEL_NAME = os.getenv('VISUAL_CNN_MODEL_NAME', 'EfficientNetV2S')
 SPACY_MODEL_NAME = os.getenv('SPACY_MODEL_NAME', "en_core_web_sm")
 MOVIEPY_THREADS = int(os.getenv('MOVIEPY_THREADS', 4))
 MOVIEPY_PRESET = os.getenv('MOVIEPY_PRESET', 'medium')
 PYSCENEDETECT_THRESHOLD = float(os.getenv('PYSCENEDETECT_THRESHOLD', 27.0))
+
 MAX_API_RESULTS_PER_SOURCE = int(os.getenv('MAX_API_RESULTS_PER_SOURCE', 10))
 MAX_SCRAPED_ITEMS_PER_SOURCE = int(os.getenv('MAX_SCRAPED_ITEMS_PER_SOURCE', 5))
 SCRAPE_INTER_PLATFORM_DELAY_SECONDS = int(os.getenv('SCRAPE_INTER_PLATFORM_DELAY_SECONDS', 2))
+
 try:
     SCRAPEABLE_PLATFORMS_JSON = os.getenv('SCRAPEABLE_PLATFORMS_JSON', '[]')
     SCRAPEABLE_PLATFORMS_CONFIG = json.loads(SCRAPEABLE_PLATFORMS_JSON)
@@ -271,6 +269,7 @@ except json.JSONDecodeError:
     if DEBUG:
         SCRAPEABLE_PLATFORMS_CONFIG.append({'name': 'PeerTube_Tilvids_Dev_Example', 'spider_name': 'peertube', 'base_url': 'https://tilvids.com', 'search_path_template': '/api/v1/search/videos?search={query}&count={max_results}&sort=-match', 'default_listing_url': 'https://tilvids.com/videos/recently-added', 'is_active': True, 'platform_identifier': 'peertube_tilvids'})
         print("Warning: SCRAPEABLE_PLATFORMS_JSON not found or invalid. Using default dev config.")
+
 EMAIL_BACKEND = os.getenv('EMAIL_BACKEND', 'django.core.mail.backends.console.EmailBackend')
 EMAIL_HOST = os.getenv('EMAIL_HOST')
 EMAIL_PORT = int(os.getenv('EMAIL_PORT', 587))
@@ -279,6 +278,7 @@ EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER')
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'Papri Support <noreply@yourpaprisite.com>')
 ACCOUNT_EMAIL_SUBJECT_PREFIX = '[Papri] '
+
 PAPRI_BASE_URL = os.getenv('PAPRI_BASE_URL', 'http://localhost:8000')
 API_BASE_URL_FRONTEND = os.getenv('API_BASE_URL_FRONTEND', '')
 MAX_DOWNLOAD_FILE_SIZE_MB = int(os.getenv('MAX_DOWNLOAD_FILE_SIZE_MB', 200))
