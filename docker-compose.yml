@@ -1,0 +1,151 @@
+# papri_project_root-/docker-compose.yml
+version: '3.9'
+
+services:
+  db:
+    image: mysql:8.0 # Use a specific version
+    container_name: papri_db
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${DB_NAME:-papri_db}
+      MYSQL_USER: ${DB_USER:-papri_user}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-papri_password}
+      MYSQL_ROOT_PASSWORD: <span class="math-inline">\{DB\_ROOT\_PASSWORD\:\-supersecretrootpassword\} \# Change this for production
+volumes\:
+\- papri\_mysql\_data\:/var/lib/mysql
+\# Optional\: If you have init scripts
+\# \- \./path/to/your/db\_init\_scripts\:/docker\-entrypoint\-initdb\.d 
+ports\:
+\- "</span>{DB_PORT_HOST:-3307}:3306" # Expose MySQL on host port 3307 by default
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u$<span class="math-inline">MYSQL\_USER", "\-p</span><span class="math-inline">MYSQL\_PASSWORD"\]
+interval\: 10s
+timeout\: 5s
+retries\: 5
+start\_period\: 30s
+redis\:
+image\: redis\:7\-alpine \# Use a specific version
+container\_name\: papri\_redis
+restart\: unless\-stopped
+ports\:
+\- "</span>{REDIS_PORT_HOST:-6379}:6379"
+    volumes:
+      - papri_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  web:
+    build:
+      context: ./backend # Path to your Django project directory containing Dockerfile
+      dockerfile: Dockerfile
+    container_name: papri_web
+    restart: unless-stopped
+    # env_file: ./backend/.env # Loads environment variables from .env file in backend dir
+    environment: # Or define them directly (can also be loaded by Dockerfile's entrypoint if using dotenv there)
+      - DJANGO_SECRET_KEY=<span class="math-inline">\{DJANGO\_SECRET\_KEY\}
+\- DEBUG\=</span>{DEBUG:-False} # Default to False for compose environment
+      - DJANGO_ALLOWED_HOSTS=<span class="math-inline">\{DJANGO\_ALLOWED\_HOSTS\:\-localhost,127\.0\.0\.1,web\} \# Add 'web' for inter\-service communication
+\- DB\_ENGINE\=django\.db\.backends\.mysql
+\- DB\_NAME\=</span>{DB_NAME:-papri_db}
+      - DB_USER=<span class="math-inline">\{DB\_USER\:\-papri\_user\}
+\- DB\_PASSWORD\=</span>{DB_PASSWORD:-papri_password}
+      - DB_HOST=db # Service name of the database container
+      - DB_PORT=3306 # Internal port for MySQL within Docker network
+      - CELERY_BROKER_URL=redis://redis:6379/0 # Service name of redis container
+      - CELERY_RESULT_BACKEND=django-db
+      - QDRANT_HOST=<span class="math-inline">\{QDRANT\_HOST\:\-qdrant\_db\} \# Assuming Qdrant runs as another service or is accessible
+\- QDRANT\_PORT\=</span>{QDRANT_PORT:-6333}
+      # Add other necessary environment variables from your .env file
+      - PAYSTACK_SECRET_KEY=<span class="math-inline">\{PAYSTACK\_SECRET\_KEY\}
+\- PAYSTACK\_PUBLIC\_KEY\=</span>{PAYSTACK_PUBLIC_KEY}
+      - PAYSTACK_WEBHOOK_SECRET=<span class="math-inline">\{PAYSTACK\_WEBHOOK\_SECRET\}
+\- YOUTUBE\_API\_KEY\=</span>{YOUTUBE_API_KEY}
+      - GUNICORN_WORKERS=3 # Example
+      - GUNICORN_LOG_LEVEL=info
+    volumes:
+      - ./backend:/app # Mount your backend code for development (reflects changes)
+      - papri_static_files:/app/staticfiles_collected # Volume for collected static files
+      - papri_media_files:/app/mediafiles_storage # Volume for user-uploaded media
+      - papri_logs:/app/logs # Volume for logs
+    ports:
+      - "<span class="math-inline">\{DJANGO\_PORT\_HOST\:\-8000\}\:8000" \# Expose Django app on host port 8000
+depends\_on\:
+db\:
+condition\: service\_healthy
+redis\:
+condition\: service\_healthy
+\# entrypoint\: /app/docker\-entrypoint\.sh \# Already set in Dockerfile
+\# command\: gunicorn \# Command passed to entrypoint
+celery\_worker\_default\:
+build\:
+context\: \./backend
+dockerfile\: Dockerfile
+container\_name\: papri\_celery\_default
+restart\: unless\-stopped
+\# env\_file\: \./backend/\.env
+environment\: \# Share the same environment as the web service
+\- DJANGO\_SETTINGS\_MODULE\=papri\_project\.settings
+\- DEBUG\=</span>{DEBUG:-False}
+      - DB_HOST=db
+      - DB_PORT=3306
+      - DB_NAME=<span class="math-inline">\{DB\_NAME\:\-papri\_db\}
+\- DB\_USER\=</span>{DB_USER:-papri_user}
+      - DB_PASSWORD=<span class="math-inline">\{DB\_PASSWORD\:\-papri\_password\}
+\- CELERY\_BROKER\_URL\=redis\://redis\:6379/0
+\- CELERY\_RESULT\_BACKEND\=django\-db
+\- CELERY\_LOG\_LEVEL\=info
+\- CELERY\_DEFAULT\_CONCURRENCY\=4
+\- QDRANT\_HOST\=</span>{QDRANT_HOST:-qdrant_db}
+      - QDRANT_PORT=<span class="math-inline">\{QDRANT\_PORT\:\-6333\}
+\# Add other necessary environment variables
+volumes\: \# Mount code for consistency, especially if entrypoint needs it
+\- \./backend\:/app
+\- papri\_media\_files\:/app/mediafiles\_storage \# Access to media if tasks need it
+\- papri\_logs\:/app/logs
+depends\_on\:
+web\: \# Depends on web to ensure migrations are run by web's entrypoint first \(or handle migrations differently\)
+condition\: service\_started \# Or a healthcheck on web if migrations are slow
+redis\:
+condition\: service\_healthy
+db\:
+condition\: service\_healthy
+entrypoint\: /app/docker\-entrypoint\.sh
+command\: celery\_worker\_default
+celery\_worker\_ai\:
+build\: \{ context\: \./backend, dockerfile\: Dockerfile \} \# Use shorthand if no extra args
+container\_name\: papri\_celery\_ai
+restart\: unless\-stopped
+environment\: \# Copy from celery\_worker\_default, adjust concurrency
+\- DJANGO\_SETTINGS\_MODULE\=papri\_project\.settings
+\- DEBUG\=</span>{DEBUG:-False}
+      - DB_HOST=db
+      - DB_PORT=3306
+      - DB_NAME=<span class="math-inline">\{DB\_NAME\:\-papri\_db\}
+\- DB\_USER\=</span>{DB_USER:-papri_user}
+      - DB_PASSWORD=<span class="math-inline">\{DB\_PASSWORD\:\-papri\_password\}
+\- CELERY\_BROKER\_URL\=redis\://redis\:6379/0
+\- CELERY\_RESULT\_BACKEND\=django\-db
+\- CELERY\_LOG\_LEVEL\=info
+\- CELERY\_AI\_CONCURRENCY\=2 \# Example
+\- QDRANT\_HOST\=</span>{QDRANT_HOST:-qdrant_db}
+      - QDRANT_PORT=<span class="math-inline">\{QDRANT\_PORT\:\-6333\}
+volumes\: \[ "\./backend\:/app", "papri\_media\_files\:/app/mediafiles\_storage", "papri\_logs\:/app/logs" \]
+depends\_on\: \{ web\: \{ condition\: service\_started \}, redis\: \{ condition\: service\_healthy \}, db\: \{ condition\: service\_healthy \} \}
+entrypoint\: /app/docker\-entrypoint\.sh
+command\: celery\_worker\_ai
+celery\_worker\_video\:
+build\: \{ context\: \./backend, dockerfile\: Dockerfile \}
+container\_name\: papri\_celery\_video
+restart\: unless\-stopped
+environment\: \# Copy from celery\_worker\_default, adjust concurrency
+\- DJANGO\_SETTINGS\_MODULE\=papri\_project\.settings
+\- DEBUG\=</span>{DEBUG:-False}
+      - DB_HOST=db
+      - DB_PORT=3306
+      - DB_NAME=<span class="math-inline">\{DB\_NAME\:\-papri\_db\}
+\- DB\_USER\=</span>{DB_USER:-papri_user}
+      - DB_PASSWORD=${DB_PASSWORD:-papri_password}
+      - CELERY_BROKER_URL=redis://redis:6379/
