@@ -1,0 +1,135 @@
+{% raw %}{% load i18n %}
+{% load allauth account socialaccount %}
+{% comment %}
+    {% extends "account/base.html" %}
+    OR
+    {% extends "_base_auth.html" %}
+{% endcomment %}
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% translate "Sign Up" %} - PAPRI AI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="icon" href="/static/images/favicon.ico" type="image/x-icon"> {# Adjust path if using {% static %} #}
+     <style>
+        /* Shared styles from login.html - ideally in a common CSS or base template */
+        .auth-form-container { max-width: 420px; }
+        .form-input {
+            @apply w-full px-4 py-2.5 bg-gray-700 border border-gray-600 rounded-lg text-gray-100 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 placeholder-gray-400;
+        }
+        .form-label { @apply block text-sm font-medium text-gray-300 mb-1; }
+        .auth-button {
+            @apply w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 px-4 rounded-lg transition duration-150 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-opacity-50;
+        }
+         .social-button {
+            @apply w-full flex items-center justify-center py-2.5 px-4 border border-gray-600 rounded-lg text-gray-300 hover:bg-gray-700 hover:text-white transition duration-150 ease-in-out;
+        }
+        .social-button svg {
+            @apply w-5 h-5 mr-2;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 flex flex-col items-center justify-center min-h-screen px-4 py-8">
+
+    <div class="auth-form-container w-full bg-gray-800 p-8 rounded-xl shadow-2xl">
+        <div class="text-center mb-8">
+            <a href="/" class="text-3xl font-bold text-white hover:text-indigo-400">PAPRI AI</a>
+            <h1 class="text-2xl font-semibold text-gray-100 mt-4">{% translate "Create Your Account" %}</h1>
+        </div>
+
+        {% if form.errors and not form.non_field_errors %}
+            <div class="bg-red-800 border border-red-700 text-red-200 px-4 py-3 rounded-lg mb-6 text-sm" role="alert">
+                <p>{% translate "Please correct the errors below." %}</p>
+            </div>
+        {% endif %}
+        {% if form.non_field_errors %}
+            {% for error in form.non_field_errors %}
+                 <div class="bg-red-800 border border-red-700 text-red-200 px-4 py-3 rounded-lg mb-6 text-sm" role="alert">
+                    {{ error }}
+                </div>
+            {% endfor %}
+        {% endif %}
+
+        <form class="signup space-y-6" id="signup_form" method="post" action="{% url 'account_signup' %}">
+            {% csrf_token %}
+            
+            {% comment %} Render all form fields. Django-allauth default signup form might include:
+                email, username (if ACCOUNT_USERNAME_REQUIRED=True), password, password2 
+            {% endcomment %}
+            
+            {% for field in form %}
+                {% if field.widget.input_type == 'checkbox' %}
+                    <div class="flex items-center">
+                        {{ field }}
+                        <label for="{{ field.id_for_label }}" class="ml-2 block text-sm text-gray-300">{{ field.label }}</label>
+                         {% if field.help_text %}<p class="mt-1 text-xs text-gray-400">{{ field.help_text|safe }}</p>{% endif %}
+                    </div>
+                {% else %}
+                    <div>
+                        <label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>
+                        {{ field }}
+                        {% if field.help_text %}<p class="mt-1 text-xs text-gray-400">{{ field.help_text|safe }}</p>{% endif %}
+                    </div>
+                {% endif %}
+                {% if field.errors %}
+                    {% for error in field.errors %}
+                        <p class="mt-1 text-xs text-red-400">{{ error }}</p>
+                    {% endfor %}
+                {% endif %}
+            {% endfor %}
+
+
+            {% if redirect_field_value %}
+                <input type="hidden" name="{{ redirect_field_name }}" value="{{ redirect_field_value }}" />
+            {% endif %}
+            
+            <button class="auth-button primaryAction" type="submit">{% translate "Sign Up" %}</button>
+        </form>
+
+        {% get_providers as socialaccount_providers %}
+        {% if socialaccount_providers %}
+            <div class="mt-6">
+                <div class="relative">
+                    <div class="absolute inset-0 flex items-center"><div class="w-full border-t border-gray-600"></div></div>
+                    <div class="relative flex justify-center text-sm"><span class="px-2 bg-gray-800 text-gray-400">{% translate "Or sign up with" %}</span></div>
+                </div>
+                <div class="mt-6 grid grid-cols-1 gap-3">
+                     {% include "socialaccount/snippets/provider_list.html" with process="connect" %}
+                </div>
+            </div>
+        {% endif %}
+
+        <p class="mt-8 text-center text-sm text-gray-400">
+            {% blocktranslate %}Already have an account?{% endblocktranslate %}
+            <a href="{{ login_url }}" class="font-medium text-indigo-400 hover:text-indigo-300 hover:underline">{% translate "Sign In" %}</a>
+        </p>
+    </div>
+
+    <footer class="text-center text-xs text-gray-500 mt-8">
+        &copy; {% now "Y" %} PAPRI AI. All rights reserved.
+    </footer>
+    
+    {% block javascript %}
+    <script type="text/javascript">
+        document.addEventListener('DOMContentLoaded', function() {
+            const firstInput = document.querySelector('.signup input[type="email"], .signup input[type="text"]');
+            if (firstInput) {
+                firstInput.focus();
+            }
+            // Apply consistent styling to allauth form inputs
+            document.querySelectorAll('.signup input[type="text"], .signup input[type="password"], .signup input[type="email"]').forEach(function(input) {
+                input.classList.add('form-input');
+            });
+            // Style checkbox
+            document.querySelectorAll('.signup input[type="checkbox"]').forEach(function(checkbox) {
+                checkbox.classList.add('h-4', 'w-4', 'text-indigo-600', 'bg-gray-700', 'border-gray-600', 'rounded', 'focus:ring-indigo-500');
+            });
+        });
+    </script>
+    {% endblock %}
+
+</body>
+</html>{% endraw %}
