@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 import json # For parsing SCRAPEABLE_PLATFORMS_JSON
+from celery.schedules import crontab # For CELERY_BEAT_SCHEDULE example
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent # Points to 'backend' directory
@@ -179,7 +180,7 @@ REST_FRAMEWORK = {
         ('rest_framework.renderers.BrowsableAPIRenderer' if DEBUG else None),
     ),
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
-    'PAGE_SIZE': 10, # Default number of items per page
+    'PAGE_SIZE': int(os.getenv('APP_DEFAULT_RESULTS_PER_PAGE', 9)), # Use APP_DEFAULT_RESULTS_PER_PAGE
     'PAGE_SIZE_QUERY_PARAM': 'page_size', # Allow client to override page size
     'MAX_PAGE_SIZE': 100,
 }
@@ -195,15 +196,52 @@ CELERY_TASK_TRACK_STARTED = True # To see 'STARTED' state in admin/flower
 CELERY_RESULT_EXTENDED = True   # Store more task metadata
 CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler' # For periodic tasks
 
+# --- BEGIN: Celery Queues Configuration ---
+# Define queues
+CELERY_TASK_QUEUES = {
+    'default': { # Default queue for general, quick tasks
+        'exchange': 'default',
+        'routing_key': 'default',
+    },
+    'ai_processing': { # For CPU/GPU-intensive content analysis (transcript, visual)
+        'exchange': 'ai_processing',
+        'routing_key': 'ai_processing',
+    },
+    'video_editing': { # For resource-heavy video editing tasks
+        'exchange': 'video_editing',
+        'routing_key': 'video_editing',
+    },
+    # Add more queues as needed, e.g., 'api_calls', 'notifications'
+}
+# Default queue for tasks not explicitly routed
+CELERY_TASK_DEFAULT_QUEUE = 'default'
+CELERY_TASK_DEFAULT_EXCHANGE = 'default'
+CELERY_TASK_DEFAULT_ROUTING_KEY = 'default'
+
+# Route tasks to specific queues
+# The keys are the full path to the task function.
+CELERY_TASK_ROUTES = {
+    # Search tasks (and their sub-components if broken down)
+    'api.tasks.process_search_query_task': {'queue': 'ai_processing'}, # Main search orchestration
+    # If ContentAnalysisAgent is called by a sub-task, route that too:
+    # 'ai_agents.content_analysis_agent.analyze_video_content_task': {'queue': 'ai_processing'}, # Hypothetical sub-task
+
+    # Video editing tasks
+    'api.tasks.process_video_edit_task': {'queue': 'video_editing'},
+
+    # Example: if some payment tasks are slow, they could go to a 'financial' queue
+    # 'payments.tasks.process_webhook_event': {'queue': 'default'}, # Assume webhooks are quick
+    
+    # Default for other tasks (if any, or tasks from third-party apps not explicitly routed)
+    # Ensure all Papri-specific tasks are routed.
+}
+# --- END: Celery Queues Configuration ---
+
+
 # CORS Settings
 CORS_ALLOW_CREDENTIALS = True # Allow cookies to be sent with CORS requests
 if DEBUG:
     CORS_ALLOW_ALL_ORIGINS = True # For local development ease
-    # Alternatively, for more control in dev:
-    # CORS_ALLOWED_ORIGINS = [
-    #     "http://localhost:8000",
-    #     "http://127.0.0.1:8000",
-    # ]
 else:
     CORS_ALLOWED_ORIGINS_STRING = os.getenv('CORS_ALLOWED_ORIGINS')
     if CORS_ALLOWED_ORIGINS_STRING:
@@ -280,12 +318,6 @@ LOGGING = {
             'level': 'INFO',
             'propagate': False,
         },
-        # Silence noisy loggers if needed
-        # 'some_noisy_third_party_logger': {
-        #     'handlers': ['console'],
-        #     'level': 'WARNING',
-        #     'propagate': False,
-        # },
     },
 }
 
@@ -318,67 +350,50 @@ QDRANT_TIMEOUT_SECONDS = int(os.getenv('QDRANT_TIMEOUT_SECONDS', 20))
 QDRANT_TRANSCRIPT_COLLECTION_NAME = os.getenv('QDRANT_TRANSCRIPT_COLLECTION_NAME', 'papri_transcripts_v1')
 QDRANT_VISUAL_COLLECTION_NAME = os.getenv('QDRANT_VISUAL_COLLECTION_NAME', 'papri_visuals_v1')
 
-# Embedding Model Dimensions (Crucial for Qdrant collection creation)
-# These should match the output dimensions of your models.
-# Example: SentenceTransformer 'all-MiniLM-L6-v2' has dim 384.
-# EfficientNetV2S (pooling='avg') output dim depends on specific S, M, L variant, e.g., 1280 for S.
-# Check your model's documentation.
-TEXT_EMBEDDING_DIMENSION = int(os.getenv('TEXT_EMBEDDING_DIMENSION', 384)) # Example for all-MiniLM-L6-v2
-IMAGE_EMBEDDING_DIMENSION = int(os.getenv('IMAGE_EMBEDDING_DIMENSION', 1280)) # Example for EfficientNetV2S (with avg pooling)
+TEXT_EMBEDDING_DIMENSION = int(os.getenv('TEXT_EMBEDDING_DIMENSION', 384))
+IMAGE_EMBEDDING_DIMENSION = int(os.getenv('IMAGE_EMBEDDING_DIMENSION', 1280))
 
 # AI Model Names
 SENTENCE_TRANSFORMER_MODEL = os.getenv('SENTENCE_TRANSFORMER_MODEL', 'all-MiniLM-L6-v2')
-VISUAL_CNN_MODEL_NAME = os.getenv('VISUAL_CNN_MODEL_NAME', 'EfficientNetV2S') # Or "ResNet50"
-# For MoviePy editor
+VISUAL_CNN_MODEL_NAME = os.getenv('VISUAL_CNN_MODEL_NAME', 'EfficientNetV2S')
+SPACY_MODEL_NAME = os.getenv('SPACY_MODEL_NAME', "en_core_web_sm")
 MOVIEPY_THREADS = int(os.getenv('MOVIEPY_THREADS', 4))
-MOVIEPY_PRESET = os.getenv('MOVIEPY_PRESET', 'medium') # ffmpeg preset: ultrafast, superfast, veryfast, faster, fast, medium, slow, slower, veryslow
+MOVIEPY_PRESET = os.getenv('MOVIEPY_PRESET', 'medium')
+PYSCENEDETECT_THRESHOLD = float(os.getenv('PYSCENEDETECT_THRESHOLD', 27.0))
 
 
 # Scraper settings
-MAX_API_RESULTS_PER_SOURCE = int(os.getenv('MAX_API_RESULTS_PER_SOURCE', 10)) # Increased default
-MAX_SCRAPED_ITEMS_PER_SOURCE = int(os.getenv('MAX_SCRAPED_ITEMS_PER_SOURCE', 5)) # Increased default
-SCRAPE_INTER_PLATFORM_DELAY_SECONDS = int(os.getenv('SCRAPE_INTER_PLATFORM_DELAY_SECONDS', 2)) # Increased politeness
+MAX_API_RESULTS_PER_SOURCE = int(os.getenv('MAX_API_RESULTS_PER_SOURCE', 10))
+MAX_SCRAPED_ITEMS_PER_SOURCE = int(os.getenv('MAX_SCRAPED_ITEMS_PER_SOURCE', 5))
+SCRAPE_INTER_PLATFORM_DELAY_SECONDS = int(os.getenv('SCRAPE_INTER_PLATFORM_DELAY_SECONDS', 2))
 
-# Load SCRAPEABLE_PLATFORMS from JSON string in .env
 try:
     SCRAPEABLE_PLATFORMS_JSON = os.getenv('SCRAPEABLE_PLATFORMS_JSON', '[]')
     SCRAPEABLE_PLATFORMS_CONFIG = json.loads(SCRAPEABLE_PLATFORMS_JSON)
 except json.JSONDecodeError:
     SCRAPEABLE_PLATFORMS_CONFIG = []
-    if DEBUG: # Add a default for dev if parsing fails or env var is missing
+    if DEBUG:
         SCRAPEABLE_PLATFORMS_CONFIG.append({
-            'name': 'PeerTube_Tilvids_Dev_Example',
-            'spider_name': 'peertube', # Name of the Scrapy spider
+            'name': 'PeerTube_Tilvids_Dev_Example', 'spider_name': 'peertube',
             'base_url': 'https://tilvids.com',
-            'search_path_template': '/api/v1/search/videos?search={query}&count={max_results}&sort=-match', # Example API
+            'search_path_template': '/api/v1/search/videos?search={query}&count={max_results}&sort=-match',
             'default_listing_url': 'https://tilvids.com/videos/recently-added',
-            'is_active': True,
-            'platform_identifier': 'peertube_tilvids' # Used to tag data from this specific instance
+            'is_active': True, 'platform_identifier': 'peertube_tilvids'
         })
-        print("Warning: SCRAPEABLE_PLATFORMS_JSON not found or invalid in .env. Using default dev config.")
+        print("Warning: SCRAPEABLE_PLATFORMS_JSON not found or invalid. Using default dev config.")
 
-# Email settings for Django Allauth (e.g., for password reset, email verification)
-EMAIL_BACKEND = os.getenv('EMAIL_BACKEND', 'django.core.mail.backends.console.EmailBackend') # Default to console for dev
-EMAIL_HOST = os.getenv('EMAIL_HOST') # e.g., 'smtp.example.com'
+# Email settings
+EMAIL_BACKEND = os.getenv('EMAIL_BACKEND', 'django.core.mail.backends.console.EmailBackend')
+EMAIL_HOST = os.getenv('EMAIL_HOST')
 EMAIL_PORT = int(os.getenv('EMAIL_PORT', 587))
 EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'True') == 'True'
-EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER') # Your SMTP username
-EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD') # Your SMTP password
+EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER')
+EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'Papri Support <noreply@yourpaprisite.com>')
-ACCOUNT_EMAIL_SUBJECT_PREFIX = '[Papri] ' # Subject prefix for emails sent by django-allauth
+ACCOUNT_EMAIL_SUBJECT_PREFIX = '[Papri] '
 
-# Base URL for constructing absolute URLs (used by allauth for email links)
-# In production, set this to your actual domain.
 PAPRI_BASE_URL = os.getenv('PAPRI_BASE_URL', 'http://localhost:8000')
-
-# API URL for frontend (can be relative if frontend is served by Django, or absolute if separate)
-API_BASE_URL_FRONTEND = os.getenv('API_BASE_URL_FRONTEND', '') # Empty means relative paths for JS
-
-# Maximum download size for videos in MB (for CAAgent)
-MAX_DOWNLOAD_FILE_SIZE_MB = int(os.getenv('MAX_DOWNLOAD_FILE_SIZE_MB', 200)) # Default to 200MB
-
-# Default number of results to show per page in the app (can be overridden by user)
+API_BASE_URL_FRONTEND = os.getenv('API_BASE_URL_FRONTEND', '')
+MAX_DOWNLOAD_FILE_SIZE_MB = int(os.getenv('MAX_DOWNLOAD_FILE_SIZE_MB', 200))
 APP_DEFAULT_RESULTS_PER_PAGE = int(os.getenv('APP_DEFAULT_RESULTS_PER_PAGE', 9))
-
-# Maximum number of trial searches for anonymous users from landing page
 MAX_DEMO_SEARCHES = int(os.getenv('MAX_DEMO_SEARCHES', 3))
