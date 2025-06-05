@@ -1,202 +1,202 @@
 # backend/ai_agents/scrapers/spiders/peertube_spider.py
 import scrapy
-from urllib.parse import urlencode, urljoin, unquote
+from urllib.parse import urlencode, urljoin, unquote, urlparse
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone as dt_timezone
+from dateutil import parser as dateutil_parser # For robust date parsing
 
-from ..items import PapriVideoItem # Relative import for items
+# Assuming PapriVideoItem is in ..items (relative to this spiders directory)
+from ..items import PapriVideoItem
 
 logger = logging.getLogger(__name__)
 
 class PeertubeSpider(scrapy.Spider):
     name = 'peertube'
-    # allowed_domains will be set dynamically based on the instance URL
-    # start_urls will also be set dynamically
+    # allowed_domains will be set dynamically based on the instance URL in __init__
 
+    # Default custom settings for this spider, can be overridden by project settings
     custom_settings = {
-        'ROBOTSTXT_OBEY': True, # Usually good to obey
-        'DOWNLOAD_DELAY': 0.5,   # Be polite to PeerTube instances
-        'CONCURRENT_REQUESTS_PER_DOMAIN': 4, # Limit concurrency
+        'ROBOTSTXT_OBEY': True,
+        'DOWNLOAD_DELAY': 0.75,
+        'CONCURRENT_REQUESTS_PER_DOMAIN': 3,
         'AUTOTHROTTLE_ENABLED': True,
-        'AUTOTHROTTLE_TARGET_CONCURRENCY': 2.0,
+        'AUTOTHROTTLE_TARGET_CONCURRENCY': 1.0, # Be very polite
+        'RETRY_TIMES': 2,
+        'RETRY_HTTP_CODES': [500, 502, 503, 504, 522, 524, 408, 429],
+        'DOWNLOAD_TIMEOUT': 20, # Shorter timeout for API calls
+        'LOG_LEVEL': 'INFO', # Reduce verbosity for this spider
     }
 
     def __init__(self, *args, **kwargs):
         super(PeertubeSpider, self).__init__(*args, **kwargs)
+        self.target_instance_base_url = kwargs.get('target_instance_base_url')
+        self.search_query = kwargs.get('search_query')
+        # Default search path template for PeerTube API v1
+        self.search_path_template = kwargs.get('search_path_template', '/api/v1/search/videos')
+        self.max_results_to_fetch = int(kwargs.get('max_results', 10)) # Total items this spider instance should yield
+        self.platform_identifier = kwargs.get('platform_identifier', 'peertube_generic')
         
-        # These will be passed from SOIAgent when running the spider
-        self.target_instance_base_url = kwargs.get('target_instance_base_url') # e.g., "https://tilvids.com"
-        self.search_query = kwargs.get('search_query') # The user's query text
-        self.search_path_template = kwargs.get('search_path_template', '/api/v1/search/videos?search={query}') # API path
-        self.max_results = int(kwargs.get('max_results', 10)) # Max results to fetch for this query
-        self.platform_identifier = kwargs.get('platform_identifier', 'peertube_generic') # e.g., 'peertube_tilvids'
+        # API specific pagination parameters
+        self.api_items_per_page = int(kwargs.get('items_per_page_api', self.max_results_to_fetch if self.max_results_to_fetch <= 25 else 25)) # PeerTube API 'count' param
+        self.current_api_start_index = int(kwargs.get('start_index_api', 0)) # PeerTube API 'start' param (0-indexed)
+        
+        self.items_yielded_count = 0 # Counter for items yielded by this spider instance
 
         if not self.target_instance_base_url:
             raise ValueError("PeertubeSpider requires 'target_instance_base_url' argument.")
         
-        self.allowed_domains = [urlparse(self.target_instance_base_url).netloc]
+        try:
+            parsed_uri = urlparse(self.target_instance_base_url)
+            self.allowed_domains = [parsed_uri.netloc]
+        except Exception as e:
+            logger.error(f"Invalid target_instance_base_url for PeertubeSpider: {self.target_instance_base_url}. Error: {e}")
+            raise ValueError(f"Invalid base URL: {self.target_instance_base_url}")
+
+        logger.info(
+            f"PeertubeSpider initialized for instance: {self.target_instance_base_url}, query: '{self.search_query}', "
+            f"max_results: {self.max_results_to_fetch}, platform_id: {self.platform_identifier}, "
+            f"API items/page: {self.api_items_per_page}, initial API start index: {self.current_api_start_index}"
+        )
+
+    def start_requests(self):
+        if not self.search_query:
+            logger.warning(f"PeertubeSpider: No search query provided for {self.target_instance_base_url}. No requests will be made.")
+            return # No query, no search.
+
+        # Construct the initial API search URL
+        # PeerTube API v1 common parameters: search, count, start, sort, nsfw, filter
+        query_params = {
+            'search': self.search_query,
+            'count': self.api_items_per_page,
+            'start': self.current_api_start_index,
+            'sort': '-match',      # Sort by relevance (match score descending)
+            'nsfw': 'false',       # Exclude NSFW content by default
+            'filter': 'local'      # Search only local videos on the instance by default
+        }
         
-        if self.search_query:
-            # Construct search URL using PeerTube API (preferred over HTML scraping if available)
-            # Example API endpoint: /api/v1/search/videos?search=myquery
-            # Some instances might use /search/videos?search=myquery (HTML)
-            if '{query}' in self.search_path_template:
-                search_path = self.search_path_template.format(query=urlencode({'search': self.search_query})[7:]) # Crude way to get just encoded query
-                # A better way for API query construction:
-                encoded_query = urlencode({'search': self.search_query}) # search=...
-                api_search_path = f"/api/v1/search/videos?{encoded_query}&count={self.max_results}&sort=-match" # Example API call
-                self.start_urls = [urljoin(self.target_instance_base_url, api_search_path)]
-            else: # Fallback if template is just a base search page
-                logger.warning(f"search_path_template for {self.target_instance_base_url} does not contain {{query}}. Search may be less effective.")
-                self.start_urls = [urljoin(self.target_instance_base_url, self.search_path_template)]
+        # The search_path_template might already include some fixed params or be just the base path
+        if '?' in self.search_path_template: # Template likely includes base path and some params
+            base_api_path = self.search_path_template
+            # We need to carefully merge/override params. For now, assume template is just base path like '/api/v1/search/videos'
+            # A more robust way would be to parse params from template and merge.
         else:
-            # If no search query, maybe fetch from a default listing URL (passed as start_urls by SOIAgent)
-            self.start_urls = kwargs.get('start_urls', [])
-            if not self.start_urls:
-                 default_listing = kwargs.get('default_listing_url')
-                 if default_listing:
-                    self.start_urls = [default_listing]
-                 else: # Fallback to a generic videos page if nothing else
-                    self.start_urls = [urljoin(self.target_instance_base_url, '/videos/recently-added')]
+            base_api_path = self.search_path_template
+            
+        # Ensure base_api_path starts with a slash if it's a path
+        if not base_api_path.startswith('/'):
+            base_api_path = '/' + base_api_path
+            
+        api_url_with_params = f"{base_api_path}?{urlencode(query_params)}"
+        start_url = urljoin(self.target_instance_base_url, api_url_with_params)
+        
+        logger.info(f"PeertubeSpider: Starting request to: {start_url}")
+        yield scrapy.Request(start_url, self.parse_api_response, errback=self.handle_error,
+                             meta={'current_api_start_index': self.current_api_start_index})
 
+    def handle_error(self, failure):
+        request_url = failure.request.url
+        exception_type = failure.type.__name__
+        exception_value = str(failure.value)
+        logger.error(
+            f"Request failed for {request_url} (Spider: {self.name}, Instance: {self.target_instance_base_url}). "
+            f"Type: {exception_type}. Value: {exception_value}.",
+            exc_info=True # Include traceback for detailed debugging
+        )
+        # You could yield an error item here if you want to propagate this to pipelines/MainOrchestrator
+        # item = PapriVideoItem()
+        # item['error_message'] = f"Request failed: {exception_type} - {exception_value} for URL {request_url}"
+        # item['platform_name'] = self.platform_identifier
+        # item['spider_name'] = self.name
+        # yield item
 
-        logger.info(f"PeertubeSpider initialized for instance: {self.target_instance_base_url}, query: '{self.search_query}', start_urls: {self.start_urls}")
-        self.item_count = 0
-
-
-    def parse(self, response):
-        """
-        Main parsing method. Handles PeerTube API JSON response for video searches.
-        If it's an HTML page (e.g., a listing page), different parsing logic would be needed.
-        """
-        logger.debug(f"Parsing response from {response.url} for PeerTube instance {self.target_instance_base_url}")
+    def parse_api_response(self, response):
+        current_api_start_index_for_this_page = response.meta.get('current_api_start_index', 0)
+        logger.debug(f"Parsing API response from {response.url} (Start index: {current_api_start_index_for_this_page})")
 
         try:
-            # Assuming the response is JSON from PeerTube's search API
             data = json.loads(response.text)
-            videos = data.get('data', [])
-            
-            if not videos:
-                logger.info(f"No video data found in JSON response from {response.url}. Total items in response: {data.get('total')}")
-                if not data.get('total',0) > 0 and not data.get('data'): # Check if it's an HTML page instead
-                    logger.warning(f"Response from {response.url} might not be JSON. Attempting HTML parse as fallback (not implemented yet).")
-                    # yield from self.parse_html_listing(response) # Implement this if needed
-                return
-
-            for video_data in videos:
-                if self.item_count >= self.max_results:
-                    logger.info(f"Reached max_results limit of {self.max_results} for PeerTube spider.")
-                    return
-
-                item = PapriVideoItem()
-                item['platform_name'] = self.platform_identifier
-                item['spider_name'] = self.name
-                item['scraped_at_timestamp'] = datetime.utcnow().isoformat()
-
-                item['title'] = video_data.get('name')
-                # PeerTube video URL usually looks like: {instance_base_url}/w/{uuid} or /videos/watch/{uuid}
-                # The API often provides `uuid`. `url` field might be the API URL.
-                video_uuid = video_data.get('uuid')
-                if video_uuid:
-                    item['original_url'] = urljoin(self.target_instance_base_url, f"/videos/watch/{video_uuid}")
-                    item['platform_video_id'] = video_uuid
-                else: # Fallback if UUID not directly available, try to get from a URL field
-                    # This part needs checking against actual PeerTube API response structure
-                    direct_url = video_data.get('url') # This might be API URL, not watch URL
-                    if direct_url and '/api/v1/videos/' in direct_url : # Heuristic
-                        item['original_url'] = direct_url.replace('/api/v1/videos/', '/videos/watch/') # Guess watch URL
-                        item['platform_video_id'] = direct_url.split('/')[-1]
-                    elif direct_url:
-                         item['original_url'] = direct_url # Assume it's the watch URL
-                         # Try to extract ID if possible (highly dependent on URL structure)
-                         try:
-                            item['platform_video_id'] = urlparse(direct_url).path.split('/')[-1]
-                         except: pass
-
-
-                item['description'] = video_data.get('description') or video_data.get('comments') # Some APIs use 'comments' for desc
-                
-                # Thumbnails: PeerTube API provides various thumbnail paths
-                # e.g., thumbnailPath, previewPath. Construct full URL.
-                thumbnail_path = video_data.get('thumbnailPath')
-                if thumbnail_path:
-                    item['thumbnail_url'] = urljoin(self.target_instance_base_url, thumbnail_path)
-                
-                item['publication_date_str'] = video_data.get('publishedAt') # ISO format string
-                
-                duration_seconds = video_data.get('duration') # Usually in seconds
-                if duration_seconds is not None:
-                    item['duration_str'] = str(duration_seconds) # Store as string, SOIAgent will parse to int
-
-                if video_data.get('account'):
-                    item['uploader_name'] = video_data['account'].get('displayName')
-                    # Construct uploader URL: {instance_base_url}/a/{account_name}
-                    uploader_account_name = video_data['account'].get('name')
-                    if uploader_account_name:
-                        item['uploader_url'] = urljoin(self.target_instance_base_url, f"/a/{uploader_account_name}")
-                
-                item['view_count_str'] = str(video_data.get('views', 0))
-                item['like_count_str'] = str(video_data.get('likes', 0))
-                # comment_count might be in `video_data.get('commentsCount')`
-                item['comment_count_str'] = str(video_data.get('commentsCount',0))
-
-                item['tags_list'] = video_data.get('tags', [])
-                if video_data.get('category'):
-                    item['category_str'] = video_data['category'].get('label')
-                
-                # Embed URL: /videos/embed/{uuid}
-                if video_uuid:
-                    item['embed_url'] = urljoin(self.target_instance_base_url, f"/videos/embed/{video_uuid}")
-
-                # Transcript handling (PeerTube API might provide captions)
-                captions = video_data.get('captions', [])
-                if captions:
-                    # Prefer English or first available VTT
-                    # This is a simplification; robust transcript fetching would check language codes
-                    # and potentially download and parse VTT files.
-                    # For now, let's assume we can find a direct VTT URL or text.
-                    # Example: caption object: {'captionPath': '/static/.../en.vtt', 'language': {'id': 'en', 'label': 'English'}}
-                    en_caption_path = next((cap.get('captionPath') for cap in captions if cap.get('language',{}).get('id') == 'en'), None)
-                    if en_caption_path:
-                        item['transcript_vtt_url'] = urljoin(self.target_instance_base_url, en_caption_path)
-                    elif captions[0].get('captionPath'): # Fallback to first caption
-                        item['transcript_vtt_url'] = urljoin(self.target_instance_base_url, captions[0].get('captionPath'))
-                
-                if item.get('title') and item.get('original_url'): # Basic validation
-                    self.item_count += 1
-                    yield item
-                else:
-                    logger.warning(f"Skipping item due to missing title or original_url: {video_data}")
-
-
-            # Handle pagination if the API supports it (e.g., using 'start' and 'count' parameters)
-            # PeerTube API uses `total` and current `data` length. If more items, construct next page URL.
-            # Example: /api/v1/search/videos?search=...&start=10&count=10
-            # This part requires careful inspection of the specific PeerTube instance's API behavior.
-            # For now, this spider fetches one page based on `max_results` via `count` param.
-            # If `data.get('total')` is greater than `len(videos)` and `len(videos)` == `self.max_results_per_page_from_api`,
-            # you would construct the next API call URL.
-
         except json.JSONDecodeError:
-            logger.error(f"Failed to decode JSON from {response.url}. Content snippet: {response.text[:200]}")
-            # Potentially try parsing as HTML if this is a common fallback
-            # yield from self.parse_html_listing(response)
-        except Exception as e:
-            logger.error(f"Error parsing PeerTube response from {response.url}: {e}", exc_info=True)
+            logger.error(f"Failed to decode JSON from {response.url}. Snippet: {response.text[:250]}", exc_info=True)
+            return # Cannot proceed without valid JSON
 
-    # def parse_html_listing(self, response):
-    #     """Fallback parser for HTML listing pages if API fails or is not used."""
-    #     logger.info(f"Attempting HTML parsing for {response.url} (Not fully implemented in this example)")
-    #     # Use Scrapy CSS selectors or XPath to extract video information
-    #     # Example (highly dependent on PeerTube theme HTML structure):
-    #     # for video_card in response.css('div.video-card-class'): # Replace with actual selectors
-    #     #     item = PapriVideoItem()
-    #     #     item['title'] = video_card.css('a.title-class::text').get()
-    #     #     item['original_url'] = response.urljoin(video_card.css('a.title-class::attr(href)').get())
-    #     #     # ... extract other fields ...
-    #     #     if item.get('title') and item.get('original_url'):
-    #     #          self.item_count += 1
-    #     #          if self.item_count > self.max_results: return
-    #     #          yield item
-    #     pass
+        videos_on_this_page = data.get('data', [])
+        total_videos_on_platform_for_query = data.get('total', 0)
+
+        if not videos_on_this_page:
+            logger.info(f"No video data in API response from {response.url}. Total videos on platform for query: {total_videos_on_platform_for_query}")
+            return
+
+        for video_data in videos_on_this_page:
+            if self.items_yielded_count >= self.max_results_to_fetch:
+                logger.info(f"PeertubeSpider: Reached max_results_to_fetch limit of {self.max_results_to_fetch}. Halting.")
+                return # Stop yielding more items
+
+            item = PapriVideoItem()
+            item['platform_name'] = self.platform_identifier
+            item['spider_name'] = self.name
+            item['scraped_at_timestamp'] = datetime.now(dt_timezone.utc).isoformat()
+            item['title'] = video_data.get('name')
+            video_uuid = video_data.get('uuid')
+
+            if video_uuid:
+                item['original_url'] = urljoin(self.target_instance_base_url, f"/videos/watch/{video_uuid}")
+                item['platform_video_id'] = video_uuid
+                item['embed_url'] = urljoin(self.target_instance_base_url, f"/videos/embed/{video_uuid}")
+            else:
+                logger.warning(f"Missing 'uuid' for video data from {response.url}: {str(video_data)[:150]}. Skipping item.")
+                continue # Cannot form a unique ID or URL without UUID
+            
+            item['description'] = video_data.get('description')
+            thumbnail_path = video_data.get('thumbnailPath')
+            if thumbnail_path: item['thumbnail_url'] = urljoin(self.target_instance_base_url, thumbnail_path)
+            
+            if video_data.get('publishedAt'):
+                try: item['publication_date_str'] = dateutil_parser.isoparse(video_data['publishedAt']).isoformat()
+                except (ValueError, TypeError) as e_date: logger.warning(f"Could not parse publishedAt date '{video_data.get('publishedAt')}' for {item['original_url']}: {e_date}")
+            
+            duration_s = video_data.get('duration') # In seconds
+            if duration_s is not None: item['duration_str'] = str(duration_s)
+
+            if video_data.get('account'):
+                item['uploader_name'] = video_data['account'].get('displayName')
+                uploader_account_name = video_data['account'].get('name')
+                if uploader_account_name: item['uploader_url'] = urljoin(self.target_instance_base_url, f"/a/{uploader_account_name}")
+            
+            item['view_count_str'] = str(video_data.get('views', 0))
+            item['like_count_str'] = str(video_data.get('likes', 0))
+            item['comment_count_str'] = str(video_data.get('commentsCount', 0))
+            item['tags_list'] = video_data.get('tags', [])
+            if video_data.get('category'): item['category_str'] = video_data['category'].get('label')
+
+            captions = video_data.get('captions', [])
+            if captions:
+                en_caption = next((c for c in captions if c.get('language', {}).get('id') == 'en'), None)
+                if en_caption and en_caption.get('captionPath'):
+                    item['transcript_vtt_url'] = urljoin(self.target_instance_base_url, en_caption['captionPath'])
+                elif captions[0].get('captionPath'): # Fallback to first caption
+                     item['transcript_vtt_url'] = urljoin(self.target_instance_base_url, captions[0]['captionPath'])
+            
+            self.items_yielded_count += 1
+            yield item
+
+        # Pagination: Check if more results are available and needed
+        next_start_index = current_api_start_index_for_this_page + len(videos_on_this_page)
+        if videos_on_this_page and next_start_index < total_videos_on_platform_for_query and self.items_yielded_count < self.max_results_to_fetch:
+            logger.info(f"PeertubeSpider: Requesting next page. New start index: {next_start_index}")
+            
+            query_params_next_page = {
+                'search': self.search_query, 'count': self.api_items_per_page, 'start': next_start_index,
+                'sort': '-match', 'nsfw': 'false', 'filter': 'local'
+            }
+            if '?' in self.search_path_template: base_api_path = self.search_path_template
+            else: base_api_path = self.search_path_template
+            if not base_api_path.startswith('/'): base_api_path = '/' + base_api_path
+            
+            next_page_api_url_with_params = f"{base_api_path}?{urlencode(query_params_next_page)}"
+            next_page_url = urljoin(self.target_instance_base_url, next_page_api_url_with_params)
+            
+            yield scrapy.Request(next_page_url, self.parse_api_response, errback=self.handle_error,
+                                 meta={'current_api_start_index': next_start_index})
+        else:
+            logger.info(f"PeertubeSpider: No more pages to fetch or max_results reached for {self.target_instance_base_url}. Total yielded: {self.items_yielded_count}")
