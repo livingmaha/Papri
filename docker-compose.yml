@@ -2,150 +2,194 @@
 version: '3.9'
 
 services:
-  db:
-    image: mysql:8.0 # Use a specific version
-    container_name: papri_db
+  # Django Backend Application
+  backend:
+    build:
+      context: ./backend # Path to the directory containing the Dockerfile
+      dockerfile: Dockerfile
+    container_name: papri_backend
+    # The command to run when the container starts for the web service.
+    # Using Gunicorn for production-like WSGI server.
+    # For development, you might use: ["python", "manage.py", "runserver", "0.0.0.0:8000"]
+    command: >
+      sh -c "python manage.py wait_for_db &&
+             python manage.py migrate &&
+             python manage.py collectstatic --noinput &&
+             gunicorn papri_project.wsgi:application --bind 0.0.0.0:8000 --workers 3 --log-level info"
+    volumes:
+      - ./backend:/app # Mounts the backend code directory for live reloading in dev
+      - static_volume:/app/staticfiles_collected # Persist static files
+      - media_volume:/app/mediafiles_storage   # Persist media files
+    ports:
+      - "8000:8000" # Maps port 8000 on the host to port 8000 in the container
+    env_file:
+      - ./backend/.env # Load environment variables from .env file in backend directory
+    depends_on:
+      db:
+        condition: service_healthy # Wait for DB to be ready
+      redis:
+        condition: service_started # Wait for Redis to start
     restart: unless-stopped
+    networks:
+      - papri_network
+
+  # MySQL Database
+  db:
+    image: mysql:8.0
+    container_name: papri_db
+    volumes:
+      - mysql_data:/var/lib/mysql # Persist database data
+      # You can mount custom MySQL config if needed:
+      # - ./config/mysql/my.cnf:/etc/mysql/my.cnf
     environment:
       MYSQL_DATABASE: ${DB_NAME:-papri_db}
       MYSQL_USER: ${DB_USER:-papri_user}
       MYSQL_PASSWORD: ${DB_PASSWORD:-papri_password}
-      MYSQL_ROOT_PASSWORD: <span class="math-inline">\{DB\_ROOT\_PASSWORD\:\-supersecretrootpassword\} \# Change this for production
-volumes\:
-\- papri\_mysql\_data\:/var/lib/mysql
-\# Optional\: If you have init scripts
-\# \- \./path/to/your/db\_init\_scripts\:/docker\-entrypoint\-initdb\.d 
-ports\:
-\- "</span>{DB_PORT_HOST:-3307}:3306" # Expose MySQL on host port 3307 by default
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-supersecretpassword} # Change this for production
+    ports:
+      - "3307:3306" # Expose MySQL on host port 3307 to avoid conflict if local MySQL runs on 3306
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u$<span class="math-inline">MYSQL\_USER", "\-p</span><span class="math-inline">MYSQL\_PASSWORD"\]
-interval\: 10s
-timeout\: 5s
-retries\: 5
-start\_period\: 30s
-redis\:
-image\: redis\:7\-alpine \# Use a specific version
-container\_name\: papri\_redis
-restart\: unless\-stopped
-ports\:
-\- "</span>{REDIS_PORT_HOST:-6379}:6379"
-    volumes:
-      - papri_redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "mysqladmin" ,"ping", "-h", "localhost", "-u$$MYSQL_USER", "-p$$MYSQL_PASSWORD"]
       interval: 10s
       timeout: 5s
       retries: 5
-
-  web:
-    build:
-      context: ./backend # Path to your Django project directory containing Dockerfile
-      dockerfile: Dockerfile
-    container_name: papri_web
     restart: unless-stopped
-    # env_file: ./backend/.env # Loads environment variables from .env file in backend dir
-    environment: # Or define them directly (can also be loaded by Dockerfile's entrypoint if using dotenv there)
-      - DJANGO_SECRET_KEY=<span class="math-inline">\{DJANGO\_SECRET\_KEY\}
-\- DEBUG\=</span>{DEBUG:-False} # Default to False for compose environment
-      - DJANGO_ALLOWED_HOSTS=<span class="math-inline">\{DJANGO\_ALLOWED\_HOSTS\:\-localhost,127\.0\.0\.1,web\} \# Add 'web' for inter\-service communication
-\- DB\_ENGINE\=django\.db\.backends\.mysql
-\- DB\_NAME\=</span>{DB_NAME:-papri_db}
-      - DB_USER=<span class="math-inline">\{DB\_USER\:\-papri\_user\}
-\- DB\_PASSWORD\=</span>{DB_PASSWORD:-papri_password}
-      - DB_HOST=db # Service name of the database container
-      - DB_PORT=3306 # Internal port for MySQL within Docker network
-      - CELERY_BROKER_URL=redis://redis:6379/0 # Service name of redis container
-      - CELERY_RESULT_BACKEND=django-db
-      - QDRANT_HOST=<span class="math-inline">\{QDRANT\_HOST\:\-qdrant\_db\} \# Assuming Qdrant runs as another service or is accessible
-\- QDRANT\_PORT\=</span>{QDRANT_PORT:-6333}
-      # Add other necessary environment variables from your .env file
-      - PAYSTACK_SECRET_KEY=<span class="math-inline">\{PAYSTACK\_SECRET\_KEY\}
-\- PAYSTACK\_PUBLIC\_KEY\=</span>{PAYSTACK_PUBLIC_KEY}
-      - PAYSTACK_WEBHOOK_SECRET=<span class="math-inline">\{PAYSTACK\_WEBHOOK\_SECRET\}
-\- YOUTUBE\_API\_KEY\=</span>{YOUTUBE_API_KEY}
-      - GUNICORN_WORKERS=3 # Example
-      - GUNICORN_LOG_LEVEL=info
-    volumes:
-      - ./backend:/app # Mount your backend code for development (reflects changes)
-      - papri_static_files:/app/staticfiles_collected # Volume for collected static files
-      - papri_media_files:/app/mediafiles_storage # Volume for user-uploaded media
-      - papri_logs:/app/logs # Volume for logs
+    networks:
+      - papri_network
+
+  # Redis (for Celery Broker & Cache)
+  redis:
+    image: redis:7-alpine
+    container_name: papri_redis
     ports:
-      - "<span class="math-inline">\{DJANGO\_PORT\_HOST\:\-8000\}\:8000" \# Expose Django app on host port 8000
-depends\_on\:
-db\:
-condition\: service\_healthy
-redis\:
-condition\: service\_healthy
-\# entrypoint\: /app/docker\-entrypoint\.sh \# Already set in Dockerfile
-\# command\: gunicorn \# Command passed to entrypoint
-celery\_worker\_default\:
-build\:
-context\: \./backend
-dockerfile\: Dockerfile
-container\_name\: papri\_celery\_default
-restart\: unless\-stopped
-\# env\_file\: \./backend/\.env
-environment\: \# Share the same environment as the web service
-\- DJANGO\_SETTINGS\_MODULE\=papri\_project\.settings
-\- DEBUG\=</span>{DEBUG:-False}
-      - DB_HOST=db
-      - DB_PORT=3306
-      - DB_NAME=<span class="math-inline">\{DB\_NAME\:\-papri\_db\}
-\- DB\_USER\=</span>{DB_USER:-papri_user}
-      - DB_PASSWORD=<span class="math-inline">\{DB\_PASSWORD\:\-papri\_password\}
-\- CELERY\_BROKER\_URL\=redis\://redis\:6379/0
-\- CELERY\_RESULT\_BACKEND\=django\-db
-\- CELERY\_LOG\_LEVEL\=info
-\- CELERY\_DEFAULT\_CONCURRENCY\=4
-\- QDRANT\_HOST\=</span>{QDRANT_HOST:-qdrant_db}
-      - QDRANT_PORT=<span class="math-inline">\{QDRANT\_PORT\:\-6333\}
-\# Add other necessary environment variables
-volumes\: \# Mount code for consistency, especially if entrypoint needs it
-\- \./backend\:/app
-\- papri\_media\_files\:/app/mediafiles\_storage \# Access to media if tasks need it
-\- papri\_logs\:/app/logs
-depends\_on\:
-web\: \# Depends on web to ensure migrations are run by web's entrypoint first \(or handle migrations differently\)
-condition\: service\_started \# Or a healthcheck on web if migrations are slow
-redis\:
-condition\: service\_healthy
-db\:
-condition\: service\_healthy
-entrypoint\: /app/docker\-entrypoint\.sh
-command\: celery\_worker\_default
-celery\_worker\_ai\:
-build\: \{ context\: \./backend, dockerfile\: Dockerfile \} \# Use shorthand if no extra args
-container\_name\: papri\_celery\_ai
-restart\: unless\-stopped
-environment\: \# Copy from celery\_worker\_default, adjust concurrency
-\- DJANGO\_SETTINGS\_MODULE\=papri\_project\.settings
-\- DEBUG\=</span>{DEBUG:-False}
-      - DB_HOST=db
-      - DB_PORT=3306
-      - DB_NAME=<span class="math-inline">\{DB\_NAME\:\-papri\_db\}
-\- DB\_USER\=</span>{DB_USER:-papri_user}
-      - DB_PASSWORD=<span class="math-inline">\{DB\_PASSWORD\:\-papri\_password\}
-\- CELERY\_BROKER\_URL\=redis\://redis\:6379/0
-\- CELERY\_RESULT\_BACKEND\=django\-db
-\- CELERY\_LOG\_LEVEL\=info
-\- CELERY\_AI\_CONCURRENCY\=2 \# Example
-\- QDRANT\_HOST\=</span>{QDRANT_HOST:-qdrant_db}
-      - QDRANT_PORT=<span class="math-inline">\{QDRANT\_PORT\:\-6333\}
-volumes\: \[ "\./backend\:/app", "papri\_media\_files\:/app/mediafiles\_storage", "papri\_logs\:/app/logs" \]
-depends\_on\: \{ web\: \{ condition\: service\_started \}, redis\: \{ condition\: service\_healthy \}, db\: \{ condition\: service\_healthy \} \}
-entrypoint\: /app/docker\-entrypoint\.sh
-command\: celery\_worker\_ai
-celery\_worker\_video\:
-build\: \{ context\: \./backend, dockerfile\: Dockerfile \}
-container\_name\: papri\_celery\_video
-restart\: unless\-stopped
-environment\: \# Copy from celery\_worker\_default, adjust concurrency
-\- DJANGO\_SETTINGS\_MODULE\=papri\_project\.settings
-\- DEBUG\=</span>{DEBUG:-False}
-      - DB_HOST=db
-      - DB_PORT=3306
-      - DB_NAME=<span class="math-inline">\{DB\_NAME\:\-papri\_db\}
-\- DB\_USER\=</span>{DB_USER:-papri_user}
-      - DB_PASSWORD=${DB_PASSWORD:-papri_password}
-      - CELERY_BROKER_URL=redis://redis:6379/
+      - "6379:6379"
+    volumes:
+      - redis_data:/data # Persist Redis data
+    restart: unless-stopped
+    networks:
+      - papri_network
+
+  # Celery Worker - Default Queue (for quick tasks)
+  celery_worker_default:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: papri_celery_default
+    # Command to start a Celery worker listening to the 'default' queue.
+    # Adjust concurrency (-c) as needed.
+    command: >
+      sh -c "python manage.py wait_for_db &&
+             celery -A papri_project worker -l info -Q default -c 2"
+    volumes:
+      - ./backend:/app
+    env_file:
+      - ./backend/.env
+    depends_on:
+      - backend # Ensure backend image is built, and settings/code are available
+      - db
+      - redis
+    restart: unless-stopped
+    networks:
+      - papri_network
+
+  # Celery Worker - AI Processing Queue
+  celery_worker_ai:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: papri_celery_ai
+    command: >
+      sh -c "python manage.py wait_for_db &&
+             celery -A papri_project worker -l info -Q ai_processing -c 1" # Lower concurrency for heavy tasks
+    volumes:
+      - ./backend:/app
+      # If AI models are large and not part of the image, mount them here:
+      # - /path/to/your/ai_models_on_host:/app/ai_models 
+    env_file:
+      - ./backend/.env
+    depends_on:
+      - backend
+      - db
+      - redis
+    # Potentially add resource limits here if these workers are very resource-intensive
+    # deploy:
+    #   resources:
+    #     limits:
+    #       cpus: '2'
+    #       memory: '4G'
+    restart: unless-stopped
+    networks:
+      - papri_network
+
+  # Celery Worker - Video Editing Queue
+  celery_worker_video:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: papri_celery_video
+    command: >
+      sh -c "python manage.py wait_for_db &&
+             celery -A papri_project worker -l info -Q video_editing -c 1"
+    volumes:
+      - ./backend:/app
+      - media_volume:/app/mediafiles_storage # Ensure worker can access/write media
+    env_file:
+      - ./backend/.env
+    depends_on:
+      - backend
+      - db
+      - redis
+    restart: unless-stopped
+    networks:
+      - papri_network
+
+  # Celery Beat (Scheduler for periodic tasks)
+  celery_beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: papri_celery_beat
+    command: >
+      sh -c "python manage.py wait_for_db &&
+             celery -A papri_project beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler"
+    volumes:
+      - ./backend:/app
+    env_file:
+      - ./backend/.env
+    depends_on:
+      - backend
+      - db
+      - redis
+    restart: unless-stopped
+    networks:
+      - papri_network
+
+  # Qdrant Vector Database (Optional, if running locally via Docker)
+  # If using a cloud Qdrant, you don't need this service.
+  # qdrant:
+  #   image: qdrant/qdrant:latest # Check for a stable version tag
+  #   container_name: papri_qdrant
+  #   ports:
+  #     - "6333:6333" # REST API
+  #     - "6334:6334" # gRPC
+  #   volumes:
+  #     - qdrant_storage:/qdrant/storage # Persist Qdrant data
+  #   # You might need to provide a Qdrant config file if not using defaults
+  #   # environment:
+  #   #   QDRANT__SERVICE__API_KEY: ${QDRANT_API_KEY:-} # If you use API keys with local Qdrant
+  #   restart: unless-stopped
+  #   networks:
+  #     - papri_network
+
+# Docker Networks
+networks:
+  papri_network:
+    driver: bridge
+
+# Docker Volumes (to persist data)
+volumes:
+  mysql_data:
+  redis_data:
+  static_volume:
+  media_volume:
+  # qdrant_storage: # If using local Qdrant service
