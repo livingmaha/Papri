@@ -1,306 +1,304 @@
+{% raw %}{% load static %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PAPRI - AI-Powered Video Meta-Search</title>
+    <title>PAPRI - AI-Powered Video Meta-Search & Editor</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdn.plyr.io/3.7.8/plyr.css" />
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/index.css') }}"> <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-    <link rel="icon" href="{{ url_for('static', filename='images/favicon.ico') }}" type="image/x-icon">
+    <link rel="stylesheet" href="{% static 'css/index.css' %}">
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <link rel="icon" href="{% static 'images/favicon.ico' %}" type="image/x-icon">
     <style>
-        /* Minor style adjustments if needed, or put in index.css */
         [x-cloak] { display: none !important; }
         .trial-blocked { cursor: not-allowed; opacity: 0.7; }
+        .feature-icon { width: 3rem; height: 3rem; margin-bottom: 1rem; color: #818cf8; /* Tailwind indigo-400 */ }
+        .faq-button svg { transition: transform 0.2s ease-in-out; }
+        .faq-button[aria-expanded="true"] svg { transform: rotate(180deg); }
     </style>
 </head>
-<body class="bg-gray-900 text-gray-100 font-sans antialiased" x-data="{ isMobileMenuOpen: false, trialSearchesLeft: 3, trialBlocked: false, demoResults: [], demoLoading: false, demoError: '' }">
+<body class="bg-gray-900 text-gray-100 font-sans antialiased" x-data="{ isMobileMenuOpen: false }">
 
     <header class="bg-gray-800 shadow-lg sticky top-0 z-50">
-        <nav class="container mx-auto px-6 py-3">
+        <nav class="container mx-auto px-6 py-3" aria-label="Main navigation">
             <div class="flex items-center justify-between">
-                <a href="#" class="text-2xl font-bold text-white hover:text-indigo-400">PAPRI AI</a>
+                <a href="/" class="text-2xl font-bold text-white hover:text-indigo-400">PAPRI AI</a>
                 <div class="hidden md:flex space-x-4">
-                    <a href="#why-papri" class="text-gray-300 hover:text-white">Why Papri?</a>
-                    <a href="#how-it-works" class="text-gray-300 hover:text-white">How It Works</a>
-                    <a href="#pricing" class="text-gray-300 hover:text-white">Pricing</a>
-                    <a href="#faq" class="text-gray-300 hover:text-white">FAQ</a>
-                    <a href="{{ url_for('account_login') }}" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-lg transition duration-150">Login</a>
-                    <a href="{{ url_for('account_signup') }}" class="bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-4 rounded-lg transition duration-150">Sign Up</a>
+                    <a href="#why-papri" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm font-medium">Why Papri?</a>
+                    <a href="#how-it-works" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm font-medium">How It Works</a>
+                    <a href="#pricing" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm font-medium">Pricing</a>
+                    <a href="#faq" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm font-medium">FAQ</a>
+                    {% if user.is_authenticated %}
+                        <a href="{% url 'papri_app_main' %}" class="bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-4 rounded-lg transition duration-150 text-sm">Go to App</a>
+                    {% else %}
+                        <a href="{% url 'account_login' %}" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-lg transition duration-150 text-sm">Login</a>
+                        <a href="{% url 'account_signup' %}" class="text-indigo-400 hover:text-white border border-indigo-400 hover:bg-indigo-500 font-semibold py-2 px-4 rounded-lg transition duration-150 text-sm">Sign Up</a>
+                    {% endif %}
                 </div>
                 <div class="md:hidden">
-                    <button @click="isMobileMenuOpen = !isMobileMenuOpen" class="text-gray-300 hover:text-white focus:outline-none">
+                    <button @click="isMobileMenuOpen = !isMobileMenuOpen" class="text-gray-300 hover:text-white focus:outline-none" aria-controls="mobile-menu" :aria-expanded="isMobileMenuOpen.toString()">
+                        <span class="sr-only">Open main menu</span>
                         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7"></path>
+                            <path x-show="!isMobileMenuOpen" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7"></path>
+                            <path x-show="isMobileMenuOpen" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
                         </svg>
                     </button>
                 </div>
             </div>
-            <div x-show="isMobileMenuOpen" x-cloak @click.away="isMobileMenuOpen = false" class="md:hidden mt-3 space-y-1">
-                <a href="#why-papri" class="block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:bg-gray-700 hover:text-white">Why Papri?</a>
-                <a href="#how-it-works" class="block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:bg-gray-700 hover:text-white">How It Works</a>
-                <a href="#pricing" class="block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:bg-gray-700 hover:text-white">Pricing</a>
-                <a href="#faq" class="block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:bg-gray-700 hover:text-white">FAQ</a>
-                <a href="{{ url_for('account_login') }}" class="block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:bg-gray-700 hover:text-white">Login</a>
-                <a href="{{ url_for('account_signup') }}" class="block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:bg-gray-700 hover:text-white">Sign Up</a>
+            <div x-show="isMobileMenuOpen" x-cloak @click.away="isMobileMenuOpen = false" class="md:hidden mt-3 space-y-1" id="mobile-menu">
+                <a href="#why-papri" @click="isMobileMenuOpen = false" class="block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:bg-gray-700 hover:text-white">Why Papri?</a>
+                <a href="#how-it-works" @click="isMobileMenuOpen = false" class="block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:bg-gray-700 hover:text-white">How It Works</a>
+                <a href="#pricing" @click="isMobileMenuOpen = false" class="block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:bg-gray-700 hover:text-white">Pricing</a>
+                <a href="#faq" @click="isMobileMenuOpen = false" class="block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:bg-gray-700 hover:text-white">FAQ</a>
+                 {% if user.is_authenticated %}
+                    <a href="{% url 'papri_app_main' %}" class="block px-3 py-2 rounded-md text-base font-medium text-green-400 hover:bg-gray-700 hover:text-white">Go to App</a>
+                {% else %}
+                    <a href="{% url 'account_login' %}" class="block px-3 py-2 rounded-md text-base font-medium text-indigo-400 hover:bg-gray-700 hover:text-white">Login</a>
+                    <a href="{% url 'account_signup' %}" class="block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:bg-gray-700 hover:text-white">Sign Up</a>
+                {% endif %}
             </div>
         </nav>
     </header>
 
-    <section class="bg-gradient-to-r from-gray-800 via-gray-900 to-black text-white py-20 md:py-32">
-        <div class="container mx-auto px-6 text-center">
-            <h1 class="text-4xl md:text-6xl font-bold mb-6 leading-tight">
-                Search <span class="text-indigo-400">Inside</span> Videos. <br class="hidden md:block"> Instantly.
-            </h1>
-            <p class="text-lg md:text-xl text-gray-300 mb-10 max-w-2xl mx-auto">
-                PAPRI's advanced AI dives deep into video transcripts and visuals across multiple platforms to find exactly what you're looking for.
-            </p>
-            <div class="flex justify-center space-x-4">
-                <a href="#try-papri" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-8 rounded-lg text-lg transition duration-150">Try Demo</a>
-                <a href="{{ url_for('account_signup') }}" class="bg-transparent hover:bg-indigo-500 text-indigo-400 font-semibold hover:text-white py-3 px-8 border border-indigo-400 hover:border-transparent rounded-lg text-lg transition duration-150">Get Started</a>
+    <main>
+        <section class="bg-gradient-to-br from-gray-800 via-gray-900 to-black text-white py-20 md:py-32">
+            <div class="container mx-auto px-6 text-center">
+                <h1 class="text-4xl md:text-6xl font-bold mb-6 leading-tight">
+                    Search <span class="text-indigo-400">Inside</span> Videos. <br class="hidden md:block"> Instantly. Effortlessly.
+                </h1>
+                <p class="text-lg md:text-xl text-gray-300 mb-10 max-w-2xl mx-auto">
+                    PAPRI's advanced AI dives deep into video transcripts and visuals across multiple platforms. Find exact moments, edit with text, and streamline your workflow.
+                </p>
+                <div class="flex flex-wrap justify-center gap-4">
+                    <a href="#try-papri" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-8 rounded-lg text-lg transition duration-150 transform hover:scale-105 shadow-lg">Try Demo Now</a>
+                    <a href="{% if user.is_authenticated %}{% url 'papri_app_main' %}{% else %}{% url 'account_signup' %}{% endif %}" class="bg-transparent hover:bg-indigo-500 text-indigo-300 font-semibold hover:text-white py-3 px-8 border-2 border-indigo-400 hover:border-indigo-500 rounded-lg text-lg transition duration-150 shadow-lg">
+                        {% if user.is_authenticated %}Go to App{% else %}Get Started Free{% endif %}
+                    </a>
+                </div>
             </div>
-        </div>
-    </section>
+        </section>
 
-    <section id="try-papri" class="py-16 bg-gray-800" x-data="papriDemo()">
-        <div class="container mx-auto px-6">
-            <h2 class="text-3xl font-bold text-center mb-4 text-white">Try PAPRI Now!</h2>
-            <p class="text-center text-gray-400 mb-2">
-                You have <strong x-text="trialSearchesLeft" class="text-indigo-400"></strong> demo searches remaining.
-            </p>
-            <p x-show="trialBlocked" x-cloak class="text-center text-red-400 mb-8">
-                Demo limit reached. <a href="{{ url_for('account_signup') }}" class="underline hover:text-indigo-300">Sign up</a> for unlimited searches!
-            </p>
-            
-            <form @submit.prevent="performDemoSearch" class="max-w-2xl mx-auto bg-gray-700 p-8 rounded-lg shadow-xl" :class="{ 'trial-blocked': trialBlocked }">
-                <div class="mb-6">
-                    <label for="demo-query-text" class="block text-sm font-medium text-gray-300 mb-1">Search for anything inside videos:</label>
-                    <input type="text" id="demo-query-text" x-model="queryText" :disabled="trialBlocked"
-                           class="w-full px-4 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white focus:ring-indigo-500 focus:border-indigo-500 placeholder-gray-500"
-                           placeholder="e.g., 'how to make sourdough bread', 'AI impact on art'">
-                </div>
-                <div class="mb-6">
-                    <label for="demo-query-image" class="block text-sm font-medium text-gray-300 mb-1">Or search by image/screenshot (optional):</label>
-                    <input type="file" id="demo-query-image" @change="handleFileSelect" :disabled="trialBlocked"
-                           class="w-full text-sm text-gray-400 bg-gray-800 border border-gray-600 rounded-lg cursor-pointer
-                                  file:mr-4 file:py-2 file:px-4 file:rounded-l-lg file:border-0
-                                  file:text-sm file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700">
-                    <p x-show="queryImageName" x-cloak class="text-xs text-gray-400 mt-1" x-text="`Selected: ${queryImageName}`"></p>
-                </div>
-                <div class="text-center">
-                    <button type="submit" :disabled="trialBlocked || demoLoading"
-                            class="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold py-3 px-8 rounded-lg text-lg transition duration-150 flex items-center justify-center mx-auto">
-                        <svg x-show="demoLoading" class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                          </svg>
-                        <span x-text="demoLoading ? 'Searching...' : 'Search Demo'"></span>
+        <section id="try-papri" class="py-16 bg-gray-800" x-data="papriDemo()">
+            <div class="container mx-auto px-6">
+                <h2 class="text-3xl font-bold text-center mb-4 text-white">Try PAPRI Now!</h2>
+                <p class="text-center text-gray-400 mb-2" role="status" aria-live="polite">
+                    You have <strong x-text="trialSearchesLeft" class="text-indigo-400"></strong> demo searches remaining.
+                </p>
+                <p x-show="trialBlocked" x-cloak class="text-center text-red-400 mb-8">
+                    Demo limit reached. <a href="{% url 'account_signup' %}" class="underline hover:text-indigo-300">Sign up</a> for unlimited searches!
+                </p>
+                
+                <div class="max-w-2xl mx-auto mb-8 flex flex-wrap justify-center gap-3" :class="{ 'trial-blocked': trialBlocked }">
+                    <button @click="runCuratedDemo(1)" :disabled="trialBlocked || demoLoading"
+                            class="bg-sky-600 hover:bg-sky-700 disabled:opacity-50 text-white font-semibold py-2 px-4 rounded-lg transition text-sm"
+                            aria-label="Run curated demo: Recipe for Paella">
+                        Demo 1: "Paella Recipe"
+                    </button>
+                    <button @click="runCuratedDemo(2)" :disabled="trialBlocked || demoLoading"
+                            class="bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white font-semibold py-2 px-4 rounded-lg transition text-sm"
+                            aria-label="Run curated demo: Fixing a leaky faucet tutorial">
+                        Demo 2: "Leaky Faucet Tutorial"
+                    </button>
+                    <button @click="runCuratedDemo(3)" :disabled="trialBlocked || demoLoading"
+                            class="bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white font-semibold py-2 px-4 rounded-lg transition text-sm"
+                            aria-label="Run curated demo: Image search for sunset over mountains">
+                        Demo 3: Image "Sunset"
                     </button>
                 </div>
-            </form>
+                
+                <form @submit.prevent="performDemoSearch" class="max-w-2xl mx-auto bg-gray-700 p-6 sm:p-8 rounded-lg shadow-xl" :class="{ 'trial-blocked': trialBlocked }" aria-labelledby="custom-demo-search-heading">
+                    <h3 id="custom-demo-search-heading" class="text-sm text-gray-400 mb-4 text-center">Or try your own custom search:</h3>
+                    <div class="mb-4">
+                        <label for="demo-query-text" class="block text-sm font-medium text-gray-300 mb-1">Search for anything inside videos:</label>
+                        <input type="text" id="demo-query-text" x-model="queryText" :disabled="trialBlocked || demoLoading"
+                               class="w-full px-4 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white focus:ring-indigo-500 focus:border-indigo-500 placeholder-gray-500"
+                               placeholder="e.g., 'how to make sourdough bread', 'AI impact on art'">
+                    </div>
+                    <div class="mb-6">
+                        <label for="demo-query-image" class="block text-sm font-medium text-gray-300 mb-1">Or search by image/screenshot (optional):</label>
+                        <input type="file" id="demo-query-image" @change="handleFileSelect($event)" :disabled="trialBlocked || demoLoading" accept="image/*"
+                               class="w-full text-sm text-gray-400 bg-gray-800 border border-gray-600 rounded-lg cursor-pointer
+                                      file:mr-4 file:py-2 file:px-4 file:rounded-l-lg file:border-0
+                                      file:text-sm file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-700 focus:ring-indigo-500">
+                        <p x-show="queryImageName" x-cloak class="text-xs text-gray-400 mt-1" x-text="`Selected: ${queryImageName}`"></p>
+                    </div>
+                    <div class="text-center">
+                        <button type="submit" :disabled="trialBlocked || demoLoading"
+                                class="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold py-3 px-8 rounded-lg text-md transition duration-150 flex items-center justify-center mx-auto">
+                            <svg x-show="demoLoading" class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" role="img" aria-label="Loading">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                              </svg>
+                            <span x-text="demoLoading ? 'Searching...' : 'Search Custom Demo'"></span>
+                        </button>
+                    </div>
+                </form>
 
-            <div x-show="demoError" x-cloak class="mt-8 max-w-2xl mx-auto p-4 bg-red-900 border border-red-700 text-red-300 rounded-lg">
-                <p x-text="demoError"></p>
-            </div>
-            <div x-show="demoResults.length > 0" x-cloak class="mt-12 max-w-4xl mx-auto">
-                <h3 class="text-2xl font-semibold text-center mb-6 text-white">Demo Results</h3>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <template x-for="result in demoResults" :key="result.id">
-                        <div class="bg-gray-700 rounded-lg shadow-lg overflow-hidden hover:shadow-indigo-500/30 transition-shadow">
-                            <img :src="result.thumbnail_url" alt="Video thumbnail" class="w-full h-48 object-cover">
-                            <div class="p-6">
-                                <h4 class="font-bold text-lg mb-2 text-white" x-text="result.title"></h4>
-                                <p class="text-gray-400 text-sm mb-1">
-                                    <span class="font-semibold" x-text="result.platform_name"></span> - <span x-text="result.uploader_name"></span>
-                                </p>
-                                <p class="text-gray-400 text-xs mb-3" x-text="`Duration: ${result.duration_str} | Published: ${result.publication_date_str}`"></p>
-                                <p class="text-gray-300 text-sm mb-4" x-text="result.description ? result.description.substring(0, 100) + '...' : 'No description available.'"></p>
-                                <div class="flex justify-between items-center">
-                                    <a :href="result.original_url" target="_blank"
-                                       class="text-sm text-indigo-400 hover:text-indigo-300 font-semibold">
-                                        View Source &rarr;
-                                    </a>
+                <div x-show="demoStatusMessage" x-cloak class="mt-6 max-w-2xl mx-auto p-3 rounded-lg text-sm text-center"
+                     :class="{ 'bg-red-900 border border-red-700 text-red-300': demoError, 'bg-blue-800 text-blue-200': !demoError }"
+                     role="status" aria-live="polite" x-text="demoStatusMessage">
+                </div>
+
+                <div x-show="demoResults.length > 0 && !demoLoading" x-cloak class="mt-10 max-w-4xl mx-auto" aria-labelledby="demo-results-heading">
+                    <h3 id="demo-results-heading" class="text-2xl font-semibold text-center mb-5 text-white">Demo Results</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        <template x-for="result in demoResults" :key="result.id">
+                            <article class="bg-gray-700 rounded-lg shadow-lg overflow-hidden hover:shadow-indigo-500/30 transition-shadow flex flex-col">
+                                <img :src="result.thumbnail_url" :alt="`Thumbnail for ${result.title}`" class="w-full h-44 object-cover">
+                                <div class="p-5 flex flex-col flex-grow">
+                                    <h4 class="font-bold text-md mb-1.5 text-white" x-text="result.title"></h4>
+                                    <p class="text-gray-400 text-xs mb-1">
+                                        <span class="font-semibold" x-text="result.platform_name"></span> - <span x-text="result.uploader_name"></span>
+                                    </p>
+                                    <p class="text-gray-400 text-xs mb-2" x-text="`Duration: ${result.duration_str} | Published: ${result.publication_date_str}`"></p>
+                                    <p class="text-gray-300 text-sm mb-3 flex-grow" x-text="result.description ? result.description.substring(0, 90) + '...' : 'No description available.'"></p>
+                                    <div class="mt-auto pt-2">
+                                        <a :href="result.original_url" target="_blank" rel="noopener noreferrer"
+                                           class="text-xs text-indigo-400 hover:text-indigo-300 font-semibold">
+                                            View Source &rarr;
+                                        </a>
                                     </div>
-                            </div>
-                        </div>
-                    </template>
+                                </div>
+                            </article>
+                        </template>
+                    </div>
                 </div>
             </div>
-        </div>
-    </section>
+        </section>
 
-    <section id="why-papri" class="py-16 bg-gray-900">
-        <div class="container mx-auto px-6">
-            <h2 class="text-3xl font-bold text-center mb-12 text-white">Why Choose PAPRI?</h2>
-            <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-                <div class="bg-gray-800 p-8 rounded-lg shadow-xl hover:shadow-indigo-500/20 transition-shadow">
-                    <svg class="w-12 h-12 text-indigo-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7"></path></svg>
-                    <h3 class="text-xl font-semibold mb-3 text-white">Deep Content Search</h3>
-                    <p class="text-gray-400">Go beyond titles and descriptions. PAPRI searches within video transcripts and analyzes visual content to find the exact moments you need.</p>
-                </div>
-                <div class="bg-gray-800 p-8 rounded-lg shadow-xl hover:shadow-indigo-500/20 transition-shadow">
-                    <svg class="w-12 h-12 text-indigo-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 11h10"></path></svg>
-                    <h3 class="text-xl font-semibold mb-3 text-white">Multi-Platform Aggregation</h3>
-                    <p class="text-gray-400">Access content from YouTube, Vimeo, Dailymotion, PeerTube, and more, all in one place. No more endless tab-switching.</p>
-                </div>
-                <div class="bg-gray-800 p-8 rounded-lg shadow-xl hover:shadow-indigo-500/20 transition-shadow">
-                     <svg class="w-12 h-12 text-indigo-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-                    <h3 class="text-xl font-semibold mb-3 text-white">AI-Powered Video Editor</h3>
-                    <p class="text-gray-400">Found your video? Edit it directly with our intuitive AI editor. Cut, trim, add text, and more with simple text prompts.</p>
-                </div>
-                <div class="bg-gray-800 p-8 rounded-lg shadow-xl hover:shadow-indigo-500/20 transition-shadow">
-                    <svg class="w-12 h-12 text-indigo-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"></path></svg>
-                    <h3 class="text-xl font-semibold mb-3 text-white">Smart Filters & Ranking</h3>
-                    <p class="text-gray-400">Fine-tune your search with advanced filters (platform, duration, date) and get results ranked by relevance, not just keywords.</p>
-                </div>
-                <div class="bg-gray-800 p-8 rounded-lg shadow-xl hover:shadow-indigo-500/20 transition-shadow">
-                    <svg class="w-12 h-12 text-indigo-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
-                    <h3 class="text-xl font-semibold mb-3 text-white">Censorship Aware</h3>
-                    <p class="text-gray-400">We strive to provide comprehensive results by aggregating from diverse sources, helping you discover content that might be filtered elsewhere.</p>
-                </div>
-                <div class="bg-gray-800 p-8 rounded-lg shadow-xl hover:shadow-indigo-500/20 transition-shadow">
-                    <svg class="w-12 h-12 text-indigo-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
-                    <h3 class="text-xl font-semibold mb-3 text-white">Fast & Intuitive</h3>
-                    <p class="text-gray-400">A clean, user-friendly interface designed for speed and ease of use, even for complex searches. Get relevant results, quickly.</p>
+        <section id="why-papri" class="py-16 bg-gray-900">
+            <div class="container mx-auto px-6">
+                <h2 class="text-3xl font-bold text-center mb-12 text-white">Why Choose PAPRI?</h2>
+                <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+                    <div class="bg-gray-800 p-8 rounded-lg shadow-xl hover:shadow-indigo-500/20 transition-shadow">
+                        <svg class="feature-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7"></path></svg>
+                        <h3 class="text-xl font-semibold mb-3 text-white">Deep Content Search</h3>
+                        <p class="text-gray-400">Go beyond titles. PAPRI searches transcripts and analyzes visuals to find exact moments.</p>
+                    </div>
+                    <div class="bg-gray-800 p-8 rounded-lg shadow-xl hover:shadow-indigo-500/20 transition-shadow">
+                        <svg class="feature-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 11h10"></path></svg>
+                        <h3 class="text-xl font-semibold mb-3 text-white">Multi-Platform Access</h3>
+                        <p class="text-gray-400">YouTube, Vimeo, Dailymotion, PeerTube & more, all in one place. No more tab-switching.</p>
+                    </div>
+                    <div class="bg-gray-800 p-8 rounded-lg shadow-xl hover:shadow-indigo-500/20 transition-shadow">
+                         <svg class="feature-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                        <h3 class="text-xl font-semibold mb-3 text-white">AI-Powered Video Editor</h3>
+                        <p class="text-gray-400">Edit with text prompts. Cut, trim, add text, and more, intuitively and fast.</p>
+                    </div>
                 </div>
             </div>
-        </div>
-    </section>
+        </section>
 
-    <section id="how-it-works" class="py-16 bg-gray-800">
-        <div class="container mx-auto px-6">
-            <h2 class="text-3xl font-bold text-center mb-12 text-white">How PAPRI Works</h2>
-            <div class="grid md:grid-cols-3 gap-10 text-center">
-                <div class="flex flex-col items-center">
-                    <div class="bg-indigo-500 text-white rounded-full w-16 h-16 flex items-center justify-center text-2xl font-bold mb-4 shadow-lg">1</div>
-                    <h3 class="text-xl font-semibold mb-2 text-white">Input Your Query</h3>
-                    <p class="text-gray-400">Type what you're looking for, upload a screenshot, or even provide a specific video URL to analyze.</p>
-                </div>
-                <div class="flex flex-col items-center">
-                    <div class="bg-indigo-500 text-white rounded-full w-16 h-16 flex items-center justify-center text-2xl font-bold mb-4 shadow-lg">2</div>
-                    <h3 class="text-xl font-semibold mb-2 text-white">AI Agents Process</h3>
-                    <p class="text-gray-400">Our AI agents spring into action, querying multiple platforms, fetching content, and analyzing transcripts & visuals.</p>
-                </div>
-                <div class="flex flex-col items-center">
-                    <div class="bg-indigo-500 text-white rounded-full w-16 h-16 flex items-center justify-center text-2xl font-bold mb-4 shadow-lg">3</div>
-                    <h3 class="text-xl font-semibold mb-2 text-white">Discover & Edit</h3>
-                    <p class="text-gray-400">Get aggregated, ranked results with relevant snippets. Play, view source, or use our AI Video Editor to make quick edits.</p>
+        <section id="how-it-works" class="py-16 bg-gray-800">
+            <div class="container mx-auto px-6">
+                <h2 class="text-3xl font-bold text-center mb-12 text-white">How PAPRI Works</h2>
+                <div class="grid md:grid-cols-3 gap-10 text-center">
+                    <div class="flex flex-col items-center">
+                        <div class="bg-indigo-500 text-white rounded-full w-16 h-16 flex items-center justify-center text-2xl font-bold mb-4 shadow-lg" aria-hidden="true">1</div>
+                        <h3 class="text-xl font-semibold mb-2 text-white">Input Your Query</h3>
+                        <p class="text-gray-400">Type, upload a screenshot, or provide a video URL to analyze.</p>
+                    </div>
+                    <div class="flex flex-col items-center">
+                        <div class="bg-indigo-500 text-white rounded-full w-16 h-16 flex items-center justify-center text-2xl font-bold mb-4 shadow-lg" aria-hidden="true">2</div>
+                        <h3 class="text-xl font-semibold mb-2 text-white">AI Agents Process</h3>
+                        <p class="text-gray-400">Our AI queries platforms, fetches content, and analyzes transcripts & visuals.</p>
+                    </div>
+                    <div class="flex flex-col items-center">
+                        <div class="bg-indigo-500 text-white rounded-full w-16 h-16 flex items-center justify-center text-2xl font-bold mb-4 shadow-lg" aria-hidden="true">3</div>
+                        <h3 class="text-xl font-semibold mb-2 text-white">Discover & Edit</h3>
+                        <p class="text-gray-400">Get ranked results with snippets. Play, view source, or use our AI Editor.</p>
+                    </div>
                 </div>
             </div>
-        </div>
-    </section>
+        </section>
 
-    <section id="pricing" class="py-16 bg-gray-900">
-        <div class="container mx-auto px-6">
-            <h2 class="text-3xl font-bold text-center mb-12 text-white">Simple, Transparent Pricing</h2>
-            <div class="max-w-md mx-auto bg-gray-800 rounded-lg shadow-xl overflow-hidden md:max-w-2xl">
-                <div class="md:flex">
-                    <div class="p-8 w-full">
+        <section id="pricing" class="py-16 bg-gray-900">
+            <div class="container mx-auto px-6">
+                <h2 class="text-3xl font-bold text-center mb-12 text-white">Simple, Transparent Pricing</h2>
+                <div class="max-w-md mx-auto bg-gray-800 rounded-lg shadow-xl overflow-hidden md:max-w-lg">
+                    <div class="p-8">
                         <div class="uppercase tracking-wide text-sm text-indigo-400 font-semibold">Papri Pro</div>
-                        <p class="block mt-1 text-3xl leading-tight font-medium text-white">$6 <span class="text-gray-400 text-lg">/ month</span></p>
-                        <p class="mt-2 text-gray-400">Unlock the full power of PAPRI. Unlimited searches, all platforms, advanced filters, and the groundbreaking AI Video Editor.</p>
-                        <ul class="mt-6 space-y-3 text-gray-300">
-                            <li class="flex items-start">
-                                <svg class="h-6 w-6 text-green-500 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
-                                Unlimited deep content searches
-                            </li>
-                            <li class="flex items-start">
-                                <svg class="h-6 w-6 text-green-500 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
-                                Access to all video platforms
-                            </li>
-                            <li class="flex items-start">
-                                <svg class="h-6 w-6 text-green-500 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
-                                Full AI Video Editor features
-                            </li>
-                            <li class="flex items-start">
-                                <svg class="h-6 w-6 text-green-500 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
-                                Advanced search filters & ranking
-                            </li>
-                            <li class="flex items-start">
-                                <svg class="h-6 w-6 text-green-500 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
-                                Search history & collections
-                            </li>
+                        <p class="block mt-1 text-4xl leading-tight font-extrabold text-white">$6 <span class="text-gray-400 text-lg font-medium">/ month</span></p>
+                        <p class="mt-2 text-gray-300">Unlock the full power of PAPRI. Unlimited searches, all platforms, advanced filters, and the groundbreaking AI Video Editor.</p>
+                        <ul class="mt-6 space-y-3 text-gray-200">
+                            <li class="flex items-start"><svg class="h-6 w-6 text-green-400 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>Unlimited deep content searches</li>
+                            <li class="flex items-start"><svg class="h-6 w-6 text-green-400 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>Access to all video platforms</li>
+                            <li class="flex items-start"><svg class="h-6 w-6 text-green-400 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>Full AI Video Editor features</li>
+                            <li class="flex items-start"><svg class="h-6 w-6 text-green-400 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>Advanced search filters & ranking</li>
                         </ul>
                         <div class="mt-8">
-                            <a href="{{ url_for('payments_checkout') }}" class="w-full block text-center bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-lg text-lg transition duration-150">
+                            <a href="{% url 'payments:list_plans' %}" class="w-full block text-center bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-lg text-lg transition duration-150 shadow-md">
                                 Subscribe Now
                             </a>
                         </div>
-                         <p class="mt-4 text-xs text-gray-500 text-center">Payments processed securely by Paystack. No Stripe here!</p>
+                         <p class="mt-4 text-xs text-gray-500 text-center">Secure payments via Paystack.</p>
                     </div>
                 </div>
             </div>
-        </div>
-    </section>
+        </section>
 
-    <section id="faq" class="py-16 bg-gray-800" x-data="{ openFAQ: null }">
-        <div class="container mx-auto px-6">
-            <h2 class="text-3xl font-bold text-center mb-12 text-white">Frequently Asked Questions</h2>
-            <div class="max-w-3xl mx-auto space-y-4">
-                <div class="bg-gray-700 rounded-lg shadow-md">
-                    <button @click="openFAQ === 1 ? openFAQ = null : openFAQ = 1" class="w-full flex items-center justify-between p-6 text-left text-white hover:bg-gray-600 focus:outline-none">
-                        <span class="text-lg font-medium">What kind of content can I search for?</span>
-                        <svg :class="{'transform rotate-180': openFAQ === 1}" class="w-5 h-5 text-gray-400 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-                    </button>
-                    <div x-show="openFAQ === 1" x-cloak x-collapse class="p-6 pt-0 text-gray-300">
-                        <p>PAPRI allows you to search for spoken words within video transcripts, and visual elements within video frames (via screenshot upload). This means you can find specific topics, mentions, objects, scenes, or even text appearing in videos.</p>
+        <section id="faq" class="py-16 bg-gray-800" x-data="{ openFAQ: null }">
+            <div class="container mx-auto px-6">
+                <h2 class="text-3xl font-bold text-center mb-12 text-white">Frequently Asked Questions</h2>
+                <div class="max-w-3xl mx-auto space-y-4">
+                    {% verbatim %}{% for i in 1..4 %}{% endverbatim %} {# Simple loop for example FAQs #}
+                    <div class="bg-gray-700 rounded-lg shadow-md">
+                        <h3 :id="`faq-question-${ {% verbatim %}{{ i }}{% endverbatim %}`">
+                            <button @click="openFAQ = (openFAQ === {% verbatim %}{{ i }}{% endverbatim %} ? null : {% verbatim %}{{ i }}{% endverbatim %})" 
+                                    :aria-expanded="(openFAQ === {% verbatim %}{{ i }}{% endverbatim %}).toString()" 
+                                    :aria-controls="`faq-answer-${ {% verbatim %}{{ i }}{% endverbatim %}`"
+                                    class="faq-button w-full flex items-center justify-between p-6 text-left text-white hover:bg-gray-600 focus:outline-none focus-visible:ring focus-visible:ring-indigo-500 focus-visible:ring-opacity-75">
+                                <span class="text-lg font-medium">
+                                    {% verbatim %}{% if i == 1 %}What kind of content can I search for?
+                                    {% elif i == 2 %}Which video platforms does PAPRI support?
+                                    {% elif i == 3 %}How does the AI Video Editor work?
+                                    {% else %}Is there a free trial?{% endif %}{% endverbatim %}
+                                </span>
+                                <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                            </button>
+                        </h3>
+                        <div x-show="openFAQ === {% verbatim %}{{ i }}{% endverbatim %}" x-collapse 
+                             :id="`faq-answer-${ {% verbatim %}{{ i }}{% endverbatim %}`" role="region" :aria-labelledby="`faq-question-${ {% verbatim %}{{ i }}{% endverbatim %}`"
+                             class="p-6 pt-0 text-gray-300">
+                            <p>
+                                {% verbatim %}{% if i == 1 %}PAPRI lets you search spoken words in transcripts and visual elements via screenshot. Find topics, mentions, objects, or text in videos.
+                                {% elif i == 2 %}We support YouTube, Vimeo, Dailymotion, PeerTube, and more, aiming for comprehensive search.
+                                {% elif i == 3 %}Select a video or upload your own. Use text prompts (e.g., "cut first 10s," "add 'Title'") for AI-powered edits.
+                                {% else %}Yes! Try core search on this page (limited demos). For full access (AI Editor, unlimited searches), a Papri Pro subscription is needed.{% endif %}{% endverbatim %}
+                            </p>
+                        </div>
                     </div>
-                </div>
-                <div class="bg-gray-700 rounded-lg shadow-md">
-                    <button @click="openFAQ === 2 ? openFAQ = null : openFAQ = 2" class="w-full flex items-center justify-between p-6 text-left text-white hover:bg-gray-600 focus:outline-none">
-                        <span class="text-lg font-medium">Which video platforms does PAPRI support?</span>
-                        <svg :class="{'transform rotate-180': openFAQ === 2}" class="w-5 h-5 text-gray-400 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-                    </button>
-                    <div x-show="openFAQ === 2" x-cloak x-collapse class="p-6 pt-0 text-gray-300">
-                        <p>We aim to support a wide range of platforms including YouTube, Vimeo, Dailymotion, and decentralized platforms like PeerTube. Our goal is to provide the most comprehensive search possible.</p>
-                    </div>
-                </div>
-                <div class="bg-gray-700 rounded-lg shadow-md">
-                    <button @click="openFAQ === 3 ? openFAQ = null : openFAQ = 3" class="w-full flex items-center justify-between p-6 text-left text-white hover:bg-gray-600 focus:outline-none">
-                        <span class="text-lg font-medium">How does the AI Video Editor work?</span>
-                        <svg :class="{'transform rotate-180': openFAQ === 3}" class="w-5 h-5 text-gray-400 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-                    </button>
-                    <div x-show="openFAQ === 3" x-cloak x-collapse class="p-6 pt-0 text-gray-300">
-                        <p>You can select a video from your search results or upload your own. Then, provide a simple text prompt describing the edits you want (e.g., "cut the first 10 seconds," "add 'My Title' at the start," "remove silent parts"). Our AI will process your request and provide an edited video.</p>
-                    </div>
-                </div>
-                 <div class="bg-gray-700 rounded-lg shadow-md">
-                    <button @click="openFAQ === 4 ? openFAQ = null : openFAQ = 4" class="w-full flex items-center justify-between p-6 text-left text-white hover:bg-gray-600 focus:outline-none">
-                        <span class="text-lg font-medium">Is there a free trial?</span>
-                        <svg :class="{'transform rotate-180': openFAQ === 4}" class="w-5 h-5 text-gray-400 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-                    </button>
-                    <div x-show="openFAQ === 4" x-cloak x-collapse class="p-6 pt-0 text-gray-300">
-                        <p>Yes! You can try our core search features directly on this landing page with a limited number of demo searches. For full access, including the AI Video Editor and unlimited searches, a Papri Pro subscription is required.</p>
-                    </div>
+                    {% verbatim %}{% endfor %}{% endverbatim %}
                 </div>
             </div>
-        </div>
-    </section>
+        </section>
 
-    <section class="py-20 bg-gradient-to-r from-indigo-700 via-purple-700 to-pink-700 text-white">
-        <div class="container mx-auto px-6 text-center">
-            <h2 class="text-3xl md:text-4xl font-bold mb-6">Ready to Revolutionize Your Video Search?</h2>
-            <p class="text-lg md:text-xl text-indigo-100 mb-10 max-w-xl mx-auto">
-                Join PAPRI today and experience the future of video discovery and editing.
-            </p>
-            <a href="{{ url_for('account_signup') }}"
-               class="bg-white hover:bg-gray-100 text-indigo-700 font-bold py-4 px-10 rounded-lg text-xl shadow-lg transition duration-150 transform hover:scale-105">
-                Sign Up for Papri Pro
-            </a>
-        </div>
-    </section>
+        <section class="py-20 bg-gradient-to-r from-indigo-700 via-purple-700 to-pink-700 text-white">
+            <div class="container mx-auto px-6 text-center">
+                <h2 class="text-3xl md:text-4xl font-bold mb-6">Ready to Revolutionize Your Video Workflow?</h2>
+                <p class="text-lg md:text-xl text-indigo-100 mb-10 max-w-xl mx-auto">
+                    Join PAPRI today. Experience the future of video discovery and editing.
+                </p>
+                <a href="{% url 'account_signup' %}"
+                   class="bg-white hover:bg-gray-100 text-indigo-700 font-bold py-4 px-10 rounded-lg text-xl shadow-lg transition duration-150 transform hover:scale-105">
+                    Sign Up for Papri Pro
+                </a>
+            </div>
+        </section>
+    </main>
 
     <footer class="bg-gray-800 text-gray-400 py-12">
         <div class="container mx-auto px-6 text-center">
             <p>&copy; <span x-text="new Date().getFullYear()"></span> PAPRI AI. All rights reserved.</p>
             <div class="mt-4 space-x-4">
-                <a href="#" class="hover:text-indigo-400">Privacy Policy</a>
-                <a href="#" class="hover:text-indigo-400">Terms of Service</a>
-                <a href="mailto:support@papri.site" class="hover:text-indigo-400">Contact Us</a>
+                <a href="/legal/privacy-policy/" class="hover:text-indigo-400 text-sm">Privacy Policy</a>
+                <a href="/legal/terms-of-service/" class="hover:text-indigo-400 text-sm">Terms of Service</a>
+                <a href="mailto:support@papri.example.com" class="hover:text-indigo-400 text-sm">Contact Us</a>
             </div>
         </div>
     </footer>
 
-    <script src="{{ url_for('static', filename='js/index.js') }}"></script>
+    <script src="{% static 'js/index.js' %}"></script>
 </body>
-</html>
+</html>{% endraw %}
