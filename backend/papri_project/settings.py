@@ -289,36 +289,55 @@ LOGGING = {
     },
 }
 
-# Papri Specific AI & Scraper Settings from .env
+# --- Papri Specific Settings ---
+
+# External Service API Keys (loaded from .env)
 YOUTUBE_API_KEY = os.getenv('YOUTUBE_API_KEY')
 VIMEO_CLIENT_ID = os.getenv('VIMEO_CLIENT_ID')
 VIMEO_CLIENT_SECRET = os.getenv('VIMEO_CLIENT_SECRET')
-VIMEO_ACCESS_TOKEN = os.getenv('VIMEO_ACCESS_TOKEN') # If using direct access token
+VIMEO_ACCESS_TOKEN = os.getenv('VIMEO_ACCESS_TOKEN')
 DAILYMOTION_API_URL = os.getenv('DAILYMOTION_API_URL', 'https://api.dailymotion.com')
-# DAILYMOTION_PUBLIC_KEY = os.getenv('DAILYMOTION_PUBLIC_KEY') # Dailymotion often uses OAuth2 or no key for public data
-# DAILYMOTION_PRIVATE_KEY = os.getenv('DAILYMOTION_PRIVATE_KEY')
 
+# Paystack Settings
 PAYSTACK_SECRET_KEY = os.getenv('PAYSTACK_SECRET_KEY')
 PAYSTACK_PUBLIC_KEY = os.getenv('PAYSTACK_PUBLIC_KEY')
-PAYSTACK_CALLBACK_URL_NAME = 'payments:paystack_callback' # Name of the URL pattern for Paystack callback
-PAYMENT_SUCCESS_REDIRECT_URL = os.getenv('PAYMENT_SUCCESS_REDIRECT_URL', '/app/#payment-success') # Frontend URL
-PAYMENT_FAILED_REDIRECT_URL = os.getenv('PAYMENT_FAILED_REDIRECT_URL', '/app/#payment-failed')   # Frontend URL
+PAYSTACK_CALLBACK_URL_NAME = 'payments:paystack_callback'
+PAYMENT_SUCCESS_REDIRECT_URL = os.getenv('PAYMENT_SUCCESS_REDIRECT_URL', '/app/#payment-success')
+PAYMENT_FAILED_REDIRECT_URL = os.getenv('PAYMENT_FAILED_REDIRECT_URL', '/app/#payment-failed')
 SIGNUP_CODE_EXPIRY_DAYS = int(os.getenv('SIGNUP_CODE_EXPIRY_DAYS', 7))
 
-# Vector DB (Qdrant example)
-QDRANT_URL = os.getenv('QDRANT_URL', 'http://localhost:6333') # Default Qdrant HTTP port is 6333
-QDRANT_API_KEY = os.getenv('QDRANT_API_KEY', None)
-QDRANT_COLLECTION_TRANSCRIPTS = os.getenv('QDRANT_COLLECTION_TRANSCRIPTS', 'papri_transcripts_v1')
-QDRANT_COLLECTION_VISUAL = os.getenv('QDRANT_COLLECTION_VISUAL', 'papri_visuals_v1')
+# Vector DB (Qdrant) Settings
+QDRANT_HOST = os.getenv('QDRANT_HOST', 'localhost')
+QDRANT_PORT = int(os.getenv('QDRANT_PORT', 6333)) # HTTP port
+QDRANT_GRPC_PORT = int(os.getenv('QDRANT_GRPC_PORT', 6334)) # gRPC port (optional, if using gRPC client)
+QDRANT_URL = os.getenv('QDRANT_URL', f"http://{QDRANT_HOST}:{QDRANT_PORT}") # Default constructed URL
+QDRANT_API_KEY = os.getenv('QDRANT_API_KEY', None) # Optional API key
+QDRANT_PREFER_GRPC = os.getenv('QDRANT_PREFER_GRPC', 'False') == 'True'
+QDRANT_TIMEOUT_SECONDS = int(os.getenv('QDRANT_TIMEOUT_SECONDS', 20))
+
+QDRANT_TRANSCRIPT_COLLECTION_NAME = os.getenv('QDRANT_TRANSCRIPT_COLLECTION_NAME', 'papri_transcripts_v1')
+QDRANT_VISUAL_COLLECTION_NAME = os.getenv('QDRANT_VISUAL_COLLECTION_NAME', 'papri_visuals_v1')
+
+# Embedding Model Dimensions (Crucial for Qdrant collection creation)
+# These should match the output dimensions of your models.
+# Example: SentenceTransformer 'all-MiniLM-L6-v2' has dim 384.
+# EfficientNetV2S (pooling='avg') output dim depends on specific S, M, L variant, e.g., 1280 for S.
+# Check your model's documentation.
+TEXT_EMBEDDING_DIMENSION = int(os.getenv('TEXT_EMBEDDING_DIMENSION', 384)) # Example for all-MiniLM-L6-v2
+IMAGE_EMBEDDING_DIMENSION = int(os.getenv('IMAGE_EMBEDDING_DIMENSION', 1280)) # Example for EfficientNetV2S (with avg pooling)
 
 # AI Model Names
 SENTENCE_TRANSFORMER_MODEL = os.getenv('SENTENCE_TRANSFORMER_MODEL', 'all-MiniLM-L6-v2')
 VISUAL_CNN_MODEL_NAME = os.getenv('VISUAL_CNN_MODEL_NAME', 'EfficientNetV2S') # Or "ResNet50"
+# For MoviePy editor
+MOVIEPY_THREADS = int(os.getenv('MOVIEPY_THREADS', 4))
+MOVIEPY_PRESET = os.getenv('MOVIEPY_PRESET', 'medium') # ffmpeg preset: ultrafast, superfast, veryfast, faster, fast, medium, slow, slower, veryslow
+
 
 # Scraper settings
-MAX_API_RESULTS_PER_SOURCE = int(os.getenv('MAX_API_RESULTS_PER_SOURCE', 5))
-MAX_SCRAPED_ITEMS_PER_SOURCE = int(os.getenv('MAX_SCRAPED_ITEMS_PER_SOURCE', 3))
-SCRAPE_INTER_PLATFORM_DELAY_SECONDS = int(os.getenv('SCRAPE_INTER_PLATFORM_DELAY_SECONDS', 1))
+MAX_API_RESULTS_PER_SOURCE = int(os.getenv('MAX_API_RESULTS_PER_SOURCE', 10)) # Increased default
+MAX_SCRAPED_ITEMS_PER_SOURCE = int(os.getenv('MAX_SCRAPED_ITEMS_PER_SOURCE', 5)) # Increased default
+SCRAPE_INTER_PLATFORM_DELAY_SECONDS = int(os.getenv('SCRAPE_INTER_PLATFORM_DELAY_SECONDS', 2)) # Increased politeness
 
 # Load SCRAPEABLE_PLATFORMS from JSON string in .env
 try:
@@ -331,9 +350,10 @@ except json.JSONDecodeError:
             'name': 'PeerTube_Tilvids_Dev_Example',
             'spider_name': 'peertube', # Name of the Scrapy spider
             'base_url': 'https://tilvids.com',
-            'search_path_template': '/search/videos?search={query}&searchTarget=local',
+            'search_path_template': '/api/v1/search/videos?search={query}&count={max_results}&sort=-match', # Example API
             'default_listing_url': 'https://tilvids.com/videos/recently-added',
-            'is_active': True
+            'is_active': True,
+            'platform_identifier': 'peertube_tilvids' # Used to tag data from this specific instance
         })
         print("Warning: SCRAPEABLE_PLATFORMS_JSON not found or invalid in .env. Using default dev config.")
 
@@ -353,3 +373,12 @@ PAPRI_BASE_URL = os.getenv('PAPRI_BASE_URL', 'http://localhost:8000')
 
 # API URL for frontend (can be relative if frontend is served by Django, or absolute if separate)
 API_BASE_URL_FRONTEND = os.getenv('API_BASE_URL_FRONTEND', '') # Empty means relative paths for JS
+
+# Maximum download size for videos in MB (for CAAgent)
+MAX_DOWNLOAD_FILE_SIZE_MB = int(os.getenv('MAX_DOWNLOAD_FILE_SIZE_MB', 200)) # Default to 200MB
+
+# Default number of results to show per page in the app (can be overridden by user)
+APP_DEFAULT_RESULTS_PER_PAGE = int(os.getenv('APP_DEFAULT_RESULTS_PER_PAGE', 9))
+
+# Maximum number of trial searches for anonymous users from landing page
+MAX_DEMO_SEARCHES = int(os.getenv('MAX_DEMO_SEARCHES', 3))
