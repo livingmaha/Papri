@@ -1,18 +1,20 @@
 # backend/papri_project/celery.py
 import os
 from celery import Celery
-from django.conf import settings # To access Django settings
+# from django.conf import settings # Not strictly needed here if app.config_from_object is used
 
 # Set the default Django settings module for the 'celery' program.
-# This must happen before importing settings or tasks.
+# This must happen before importing tasks or anything that might import Django settings.
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'papri_project.settings')
 
-# Create a Celery application instance named 'papri_project' (or any name you prefer)
+# Create a Celery application instance
+# The first argument is the name of the current module ('papri_project' here)
+# This name is also used by default for the main Celery queue (if not overridden)
 app = Celery('papri_project')
 
 # Configure Celery using settings from Django settings.py.
 # The CELERY_ namespace means all Celery configuration options
-# must have a `CELERY_` prefix in settings.py.
+# must have a `CELERY_` prefix in settings.py (e.g., CELERY_BROKER_URL).
 app.config_from_object('django.conf:settings', namespace='CELERY')
 
 # Load task modules from all registered Django app configs.
@@ -20,20 +22,15 @@ app.config_from_object('django.conf:settings', namespace='CELERY')
 # within each app listed in INSTALLED_APPS.
 app.autodiscover_tasks()
 
-# Example debug task (optional, can be removed)
+# Optional: Define a simple debug task to test worker connectivity
 @app.task(bind=True, name='papri_project.debug_task')
 def debug_task(self):
+    from django.conf import settings as django_settings # Import here to ensure settings are loaded
     print(f'Request: {self.request!r}')
-    # Log Django settings to verify Celery worker has access (for debugging)
-    # from django.conf import settings as django_settings
-    # print(f"Celery Debug Task: Django SECRET_KEY starts with: {django_settings.SECRET_KEY[:5]}")
+    logger_name = self.app.conf.task_default_queue or 'default'
+    print(f'This debug task is running on queue: {logger_name}')
+    print(f"Celery Debug Task: Django TIME_ZONE is: {django_settings.TIME_ZONE}")
+    return "Celery debug task executed successfully."
 
-# If you have periodic tasks defined in settings.py (CELERY_BEAT_SCHEDULE),
-# Celery Beat will pick them up.
-# Alternatively, you can define them programmatically here if preferred,
-# but using django-celery-beat with DatabaseScheduler is often more flexible.
-
-# Example of a shared task (though tasks are typically in app-specific tasks.py)
-# @shared_task
-# def add(x, y):
-#   return x + y
+# If you have periodic tasks defined via CELERY_BEAT_SCHEDULE in settings.py,
+# and use django-celery-beat, they will be picked up automatically.
