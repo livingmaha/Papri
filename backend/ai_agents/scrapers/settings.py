@@ -1,115 +1,117 @@
-# backend/ai_agents/scrapers/settings.py
+# backend/ai_agents/scrapers/scrapers/settings.py (or your Scrapy project's settings path)
 
 # Scrapy settings for papri_scrapers project
-#
-# For simplicity, we'll keep this minimal.
-# When running Scrapy spiders via Django (e.g., through a management command or Celery task),
-# you might inject Django settings or use environment variables.
-
 BOT_NAME = 'papri_scrapers'
 
-SPIDER_MODULES = ['ai_agents.scrapers.spiders']
-NEWSPIDER_MODULE = 'ai_agents.scrapers.spiders'
-
+SPIDER_MODULES = ['ai_agents.scrapers.spiders'] # Ensure this path is correct relative to Scrapy project root
+NEWSPIDER_MODULE = 'ai_agents.scrapers.spiders' # Ensure this path is correct
 
 # Obey robots.txt rules
-ROBOTSTXT_OBEY = True # Be a good internet citizen
+ROBOTSTXT_OBEY = True
 
-# Configure maximum concurrent requests performed by Scrapy (default: 16)
-# CONCURRENT_REQUESTS = 16
+# --- PAPRI CUSTOMIZATIONS ---
+# Attempt to load Django settings to get USER_AGENT_LIST, PROXY_LIST etc.
+# This requires the Scrapy process to have Django environment configured.
+# This is typically handled when running spiders via Django management commands or Celery tasks.
+DJANGO_SETTINGS_MODULE = os.environ.get('DJANGO_SETTINGS_MODULE', 'papri_project.settings')
+try:
+    from django.conf import settings as django_settings
+    # User-Agent Settings
+    USER_AGENT = getattr(django_settings, 'DEFAULT_USER_AGENT', 'PapriSearchBot/1.0 (+http://yourpaprisite.com/bot-info)')
+    USER_AGENT_LIST_FROM_DJANGO = getattr(django_settings, 'USER_AGENT_LIST', None)
+    
+    # Proxy Settings
+    HTTP_PROXY_FROM_DJANGO = getattr(django_settings, 'HTTP_PROXY', None)
+    HTTPS_PROXY_FROM_DJANGO = getattr(django_settings, 'HTTPS_PROXY', None)
+    PROXY_LIST_FROM_DJANGO = getattr(django_settings, 'PROXY_LIST', None)
+    
+    # Configure download timeout (example)
+    DOWNLOAD_TIMEOUT = getattr(django_settings, 'SCRAPY_DOWNLOAD_TIMEOUT', 30) # Default to 30s
 
-# Configure a delay for requests for the same website (default: 0)
-# See https://docs.scrapy.org/en/latest/topics/settings.html#download-delay
-# DOWNLOAD_DELAY = 1 # 1 second delay can be polite
-# The download delay setting will honor only one of:
-# CONCURRENT_REQUESTS_PER_DOMAIN = 8 # Default is 8
-# CONCURRENT_REQUESTS_PER_IP = 0 # Default is 0 (disabled)
+except ImportError:
+    print("Scrapy Project Settings: Could not import Django settings. Using Scrapy defaults or .env variables directly if configured.")
+    USER_AGENT = os.getenv('SCRAPY_DEFAULT_USER_AGENT', 'PapriSearchBot/1.0 (+http://yourpaprisite.com/bot-info)')
+    USER_AGENT_LIST_FROM_DJANGO = json.loads(os.getenv('USER_AGENT_LIST_JSON', '[]'))
+    HTTP_PROXY_FROM_DJANGO = os.getenv('HTTP_PROXY', None)
+    PROXY_LIST_FROM_DJANGO = json.loads(os.getenv('PROXY_LIST_JSON', '[]'))
+    DOWNLOAD_TIMEOUT = int(os.getenv('SCRAPY_DOWNLOAD_TIMEOUT', 30))
 
-# Disable cookies (enabled by default)
-# COOKIES_ENABLED = False
 
-# Disable Telnet Console (enabled by default)
-# TELNETCONSOLE_ENABLED = False
-
-# Override the default request headers:
+# Default request headers
 DEFAULT_REQUEST_HEADERS = {
   'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-  'Accept-Language': 'en-US,en;q=0.9', # Prefer English content
-  # 'User-Agent': 'PapriSearchBot/1.0 (+http://yourpaprisite.com/bot-info)', # Set a custom User-Agent
+  'Accept-Language': 'en-US,en;q=0.9',
+  # User-Agent will be set by UserAgentMiddleware or RandomUserAgentMiddleware if enabled
 }
 
-# Enable or disable spider middlewares
-# See https://docs.scrapy.org/en/latest/topics/spider-middleware.html
-# SPIDER_MIDDLEWARES = {
-#    'papri_scrapers.middlewares.PapriScrapersSpiderMiddleware': 543,
-# }
+# Configure a delay for requests for the same website (default: 0)
+DOWNLOAD_DELAY = 1 # Start with 1 second delay, AutoThrottle can adjust
+CONCURRENT_REQUESTS_PER_DOMAIN = 4 # Limit concurrency
 
-# Enable or disable downloader middlewares
-# See https://docs.scrapy.org/en/latest/topics/settings.html#downloader-middlewares
-# DOWNLOADER_MIDDLEWARES = {
-#    'papri_scrapers.middlewares.PapriScrapersDownloaderMiddleware': 543,
-#    'scrapy.downloadermiddlewares.useragent.UserAgentMiddleware': None, # Disable default Scrapy UA
-#    'scrapy_user_agents.middlewares.RandomUserAgentMiddleware': 400, # If using scrapy-user-agents
-# }
+# Enable and configure AutoThrottle
+AUTOTHROTTLE_ENABLED = True
+AUTOTHROTTLE_START_DELAY = 1 # Initial download delay
+AUTOTHROTTLE_MAX_DELAY = 30  # Max download delay
+AUTOTHROTTLE_TARGET_CONCURRENCY = 1.5 # Aim for this many concurrent requests per domain on average
+AUTOTHROTTLE_DEBUG = False # Set to True to see throttling stats
 
-# Enable or disable extensions
-# See https://docs.scrapy.org/en/latest/topics/extensions.html
-# EXTENSIONS = {
-#    'scrapy.extensions.telnet.TelnetConsole': None,
-# }
+# Retry Middleware Settings (enabled by default, but can be configured)
+RETRY_ENABLED = True
+RETRY_TIMES = 3 # Retry failed requests 3 times
+RETRY_HTTP_CODES = [500, 502, 503, 504, 522, 524, 408, 429] # HTTP codes to retry
+# For more robust retry, consider scrapy-retry-policies or custom retry logic.
+
+# Downloader Middlewares
+DOWNLOADER_MIDDLEWARES = {
+   # 'scrapy.downloadermiddlewares.httpproxy.HttpProxyMiddleware': 110, # For basic proxy
+   # 'ai_agents.scrapers.middlewares.RotatingProxyMiddleware': 610, # If you implement a custom one
+   'scrapy.downloadermiddlewares.useragent.UserAgentMiddleware': None, # Disable default Scrapy UA
+   # Using scrapy-user-agents for random user agent rotation:
+   'scrapy_user_agents.middlewares.RandomUserAgentMiddleware': 400,
+}
+
+# Pass the list of user agents to scrapy-user-agents (if USER_AGENT_LIST_FROM_DJANGO is populated)
+if USER_AGENT_LIST_FROM_DJANGO:
+    USER_AGENTS = USER_AGENT_LIST_FROM_DJANGO
+else: # Fallback if Django settings not loaded or list is empty
+    USER_AGENTS = [
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Version/14.1.1 Safari/537.36",
+        "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:89.0) Gecko/20100101 Firefox/89.0",
+        USER_AGENT # Include the default one
+    ]
+
+
+# If using a single proxy from Django settings:
+# Ensure HttpProxyMiddleware is enabled (it usually is by default if http_proxy env var is set by Scrapy)
+# And set HTTP_PROXY / HTTPS_PROXY environment variables before running Scrapy,
+# or configure them directly if your custom proxy middleware needs it.
+# if HTTP_PROXY_FROM_DJANGO:
+#     # This setup is more for when Scrapy runs standalone and picks up env vars.
+#     # If run via Django, ensure these env vars are available to the Scrapy process.
+#     os.environ['HTTP_PROXY'] = HTTP_PROXY_FROM_DJANGO
+#     os.environ['HTTPS_PROXY'] = HTTPS_PROXY_FROM_DJANGO if HTTPS_PROXY_FROM_DJANGO else HTTP_PROXY_FROM_DJANGO
+
+# If using a proxy list for a custom rotating proxy middleware,
+# you'd pass PROXY_LIST_FROM_DJANGO to that middleware's settings.
+# Example custom setting for a hypothetical RotatingProxyMiddleware:
+# ROTATING_PROXY_LIST = PROXY_LIST_FROM_DJANGO
+
 
 # Configure item pipelines
-# See https://docs.scrapy.org/en/latest/topics/item-pipeline.html
 # ITEM_PIPELINES = {
-#    'ai_agents.scrapers.pipelines.PapriScrapersPipeline': 300,
-#    # Example: a pipeline to save to JSON file for debugging
-#    # 'ai_agents.scrapers.pipelines.JsonWriterPipeline': 800,
+#    'ai_agents.scrapers.pipelines.ValidationPipeline': 300,
+#    'ai_agents.scrapers.pipelines.JsonLinesWriterPipeline': 800, # If outputting to file directly
 # }
 
-# Enable and configure the AutoThrottle extension (disabled by default)
-# See https://docs.scrapy.org/en/latest/topics/autothrottle.html
-# AUTOTHROTTLE_ENABLED = True
-# The initial download delay
-# AUTOTHROTTLE_START_DELAY = 5
-# The maximum download delay to be set in case of high latencies
-# AUTOTHROTTLE_MAX_DELAY = 60
-# The average number of requests Scrapy should be sending in parallel to
-# each remote server
-# AUTOTHROTTLE_TARGET_CONCURRENCY = 1.0
-# Enable showing throttling stats for every response received:
-# AUTOTHROTTLE_DEBUG = False
+# Max items to scrape per spider run (can be overridden by spider arguments or spider logic)
+CLOSESPIDER_ITEMCOUNT = getattr(settings, 'MAX_SCRAPED_ITEMS_PER_SOURCE', 50)
 
-# Enable and configure HTTP caching (disabled by default)
-# See https://docs.scrapy.org/en/latest/topics/downloader-middleware.html#httpcache-middleware-settings
-# HTTPCACHE_ENABLED = True
-# HTTPCACHE_EXPIRATION_SECS = 0 # Never expire
-# HTTPCACHE_DIR = 'httpcache'
-# HTTPCACHE_IGNORE_HTTP_CODES = []
-# HTTPCACHE_STORAGE = 'scrapy.extensions.httpcache.FilesystemCacheStorage'
+# Logging
+LOG_LEVEL = 'INFO'
+# LOG_FILE = 'scrapy_papri.log' # Define if you want file-based logging from Scrapy
 
-# Set settings whose default value is deprecated to a future-proof value
+# Ensure compatibility for Scrapy 2.6+
 REQUEST_FINGERPRINTER_IMPLEMENTATION = '2.7'
-TWISTED_REACTOR = 'twisted.internet.asyncioreactor.AsyncioSelectorReactor' # For Scrapy 2.6+
+TWISTED_REACTOR = 'twisted.internet.asyncioreactor.AsyncioSelectorReactor'
 FEED_EXPORT_ENCODING = 'utf-8'
-
-# Custom settings for Papri
-# These could be loaded from Django settings or environment variables when spiders run.
-# For example, in your Django settings.py:
-# SCRAPER_USER_AGENT = "PapriSearchBot/1.0 (+http://yourpaprisite.com/bot-info)"
-# And then in spider: from django.conf import settings; user_agent = settings.SCRAPER_USER_AGENT
-
-# LOG_LEVEL = 'INFO' # Default is DEBUG, can be noisy
-# LOG_FILE = 'scrapy_log.txt' # If you want to log to a file
-
-# For Selenium/Playwright integration (if needed for dynamic sites)
-# These would require additional setup in middlewares.
-# from shutil import which
-# SELENIUM_DRIVER_NAME = 'chrome'
-# SELENIUM_DRIVER_EXECUTABLE_PATH = which('chromedriver')
-# SELENIUM_DRIVER_ARGUMENTS=['--headless'] # Or other options
-
-# PLAYWRIGHT_BROWSER_TYPE = 'chromium'
-# PLAYWRIGHT_LAUNCH_OPTIONS = {'headless': True}
-
-# Max items to scrape per spider run (can be overridden by spider arguments)
-CLOSESPIDER_ITEMCOUNT = 100 # Default limit if not set by caller
