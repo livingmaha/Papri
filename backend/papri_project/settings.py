@@ -249,10 +249,12 @@ TEXT_EMBEDDING_DIMENSION = int(os.getenv('TEXT_EMBEDDING_DIMENSION', 384))
 IMAGE_EMBEDDING_DIMENSION = int(os.getenv('IMAGE_EMBEDDING_DIMENSION', 1280))
 SENTENCE_TRANSFORMER_MODEL = os.getenv('SENTENCE_TRANSFORMER_MODEL', 'all-MiniLM-L6-v2')
 VISUAL_CNN_MODEL_NAME = os.getenv('VISUAL_CNN_MODEL_NAME', 'EfficientNetV2S')
-SPACY_MODEL_NAME = os.getenv('SPACY_MODEL_NAME', "en_core_web_sm") # Added from previous work
+SPACY_MODEL_NAME = os.getenv('SPACY_MODEL_NAME', "en_core_web_sm")
 MOVIEPY_THREADS = int(os.getenv('MOVIEPY_THREADS', 4))
 MOVIEPY_PRESET = os.getenv('MOVIEPY_PRESET', 'medium')
 PYSCENEDETECT_THRESHOLD = float(os.getenv('PYSCENEDETECT_THRESHOLD', 27.0))
+PYSCENEDETECT_MIN_SCENE_LEN = int(os.getenv('PYSCENEDETECT_MIN_SCENE_LEN', 15)) # ADDED
+
 MAX_API_RESULTS_PER_SOURCE = int(os.getenv('MAX_API_RESULTS_PER_SOURCE', 10))
 MAX_SCRAPED_ITEMS_PER_SOURCE = int(os.getenv('MAX_SCRAPED_ITEMS_PER_SOURCE', 5))
 SCRAPE_INTER_PLATFORM_DELAY_SECONDS = int(os.getenv('SCRAPE_INTER_PLATFORM_DELAY_SECONDS', 2))
@@ -267,26 +269,25 @@ except json.JSONDecodeError:
         print("Warning: SCRAPEABLE_PLATFORMS_JSON not found or invalid. Using default dev config.")
 
 # --- BEGIN: Scraping Robustness Settings ---
-# User Agents for Scrapy
-# Option 1: Define a list of user agents (can be extensive)
 USER_AGENT_LIST_JSON = os.getenv('USER_AGENT_LIST_JSON', '["Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.107 Safari/537.36", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36"]')
 try:
     USER_AGENT_LIST = json.loads(USER_AGENT_LIST_JSON)
 except json.JSONDecodeError:
     USER_AGENT_LIST = ["PapriSearchBot/1.0 (+http://yourpaprisite.com/bot-info)"] # Fallback
-DEFAULT_USER_AGENT = os.getenv('DEFAULT_USER_AGENT', USER_AGENT_LIST[0])
+DEFAULT_USER_AGENT = os.getenv('DEFAULT_USER_AGENT', USER_AGENT_LIST[0] if USER_AGENT_LIST else "PapriSearchBot/1.0")
 
-# Proxy Settings for Scrapy (examples, integrate with a real proxy service)
-# Option 1: Single proxy
-HTTP_PROXY = os.getenv('HTTP_PROXY', None) # e.g., 'http://user:pass@host:port'
-HTTPS_PROXY = os.getenv('HTTPS_PROXY', None) # e.g., 'http://user:pass@host:port'
-
-# Option 2: Proxy list for rotation (e.g., from a file or env var)
-PROXY_LIST_JSON = os.getenv('PROXY_LIST_JSON', '[]') # e.g., '["http://proxy1", "http://proxy2"]'
+HTTP_PROXY = os.getenv('HTTP_PROXY', None)
+HTTPS_PROXY = os.getenv('HTTPS_PROXY', None)
+PROXY_LIST_JSON = os.getenv('PROXY_LIST_JSON', '[]')
 try:
     PROXY_LIST = json.loads(PROXY_LIST_JSON)
 except json.JSONDecodeError:
     PROXY_LIST = []
+
+SCRAPY_SPIDER_TIMEOUT = int(os.getenv('SCRAPY_SPIDER_TIMEOUT', 300)) # Timeout for Scrapy spider subprocess
+SCRAPY_DOWNLOAD_TIMEOUT = int(os.getenv('SCRAPY_DOWNLOAD_TIMEOUT', 30)) # Timeout for individual Scrapy HTTP requests
+SCRAPY_DOWNLOAD_DELAY = float(os.getenv('SCRAPY_DOWNLOAD_DELAY', 0.75)) # Base download delay for Scrapy
+SCRAPY_CONCURRENT_REQUESTS_PER_DOMAIN = int(os.getenv('SCRAPY_CONCURRENT_REQUESTS_PER_DOMAIN', 4))
 # --- END: Scraping Robustness Settings ---
 
 EMAIL_BACKEND = os.getenv('EMAIL_BACKEND', 'django.core.mail.backends.console.EmailBackend')
@@ -298,8 +299,4 @@ EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'Papri Support <noreply@yourpaprisite.com>')
 ACCOUNT_EMAIL_SUBJECT_PREFIX = '[Papri] '
 
-PAPRI_BASE_URL = os.getenv('PAPRI_BASE_URL', 'http://localhost:8000')
-API_BASE_URL_FRONTEND = os.getenv('API_BASE_URL_FRONTEND', '')
-MAX_DOWNLOAD_FILE_SIZE_MB = int(os.getenv('MAX_DOWNLOAD_FILE_SIZE_MB', 200))
-APP_DEFAULT_RESULTS_PER_PAGE = int(os.getenv('APP_DEFAULT_RESULTS_PER_PAGE', 9))
-MAX_DEMO_SEARCHES = int(os.getenv('MAX_DEMO_SEARCHES', 3))
+PAPRI_BASE_URL = os.getenv('PAPRI_BASE_URL', 'http://localhost:80
