@@ -4,19 +4,50 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PAPRI App</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdn.plyr.io/3.7.8/plyr.css" />
-    <link rel="stylesheet" href="% static 'css/papriapp.css' %">
-    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-    <link rel="icon" href="{% static 'images/favicon.ico' %}" type="image/x-icon">
+    <script src="[https://cdn.tailwindcss.com](https://cdn.tailwindcss.com)"></script>
+    <link rel="stylesheet" href="[https://cdn.plyr.io/3.7.8/plyr.css](https://cdn.plyr.io/3.7.8/plyr.css)" />
+    {% comment %} {% load static %} replaced with direct path for this context {% endcomment %}
+    <link rel="stylesheet" href="/static/css/papriapp.css">
+    <script defer src="[https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js](https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js)"></script>
+    <link rel="icon" href="/static/images/favicon.ico" type="image/x-icon">
     <style>
         [x-cloak] { display: none !important; }
         .sidebar-icon { width: 1.25rem; height: 1.25rem; margin-right: 0.75rem; flex-shrink: 0; }
         .active-nav-link { background-color: #374151; /* Tailwind gray-700 */ color: white; border-left: 3px solid #6366F1; /* Tailwind indigo-500 */}
         .modal-overlay { background-color: rgba(17, 24, 39, 0.85); /* Tailwind gray-900 with more opacity */ }
-        /* Basic spinner for input fields or small areas */
         .input-spinner { border: 2px solid #4A5568; border-top-color: #6366F1; border-radius: 50%; width: 1rem; height: 1rem; animation: spin 0.8s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Custom File Input Accessibility */
+        .custom-file-input-label {
+            cursor: pointer;
+            display: inline-block;
+            /* Style as a button */
+            padding: 0.5rem 1rem;
+            background-color: #4F46E5; /* indigo-600 */
+            color: white;
+            border-radius: 0.375rem; /* rounded-md */
+            font-weight: 600; /* semibold */
+            transition: background-color 0.2s;
+        }
+        .custom-file-input-label:hover {
+            background-color: #4338CA; /* indigo-700 */
+        }
+        .custom-file-input-label:focus-within { /* For keyboard focus on the hidden input */
+            outline: 2px solid #6366F1; /* Focus ring for the label */
+            outline-offset: 2px;
+        }
+        .visually-hidden {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border-width: 0;
+        }
     </style>
 </head>
 <body class="bg-gray-900 text-gray-100 font-sans antialiased" 
@@ -24,7 +55,8 @@
       @hashchange.window="handleHashChange()" 
       x-init="initializeApplication()">
 
-    {% csrf_token %} {# For Django CSRF protection on POST requests via fetch #}
+    {% comment %} {% csrf_token %} Added to top level of body so JS can pick it up {% endcomment %}
+    <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
 
     <div class="flex h-screen overflow-hidden">
         <aside class="w-64 bg-gray-800 shadow-md flex-shrink-0 hidden md:flex md:flex-col overflow-y-auto">
