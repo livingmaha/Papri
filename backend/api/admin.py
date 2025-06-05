@@ -1,379 +1,368 @@
 # backend/api/admin.py
 from django.contrib import admin
-from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
-from django.contrib.auth.models import User # If extending User admin for UserProfile
+from django.utils.html import format_html
+from django.urls import reverse
+import json # For pretty printing JSON fields
 
+# Import models from the current app (api.models)
 from .models import (
     Video, VideoSource, Transcript, ExtractedKeyword, VideoTopic,
-    VideoFrameFeature, UserProfile, SearchTask, SignupCode,
-    VideoEditProject, EditTask
+    VideoFrameFeature, SearchTask, SignupCode
 )
 
-# --- Inlines ---
-# Inlines allow editing related models on the same page as the parent model.
+# --- Inlines for Related Models ---
 
-class VideoSourceInline(admin.TabularInline): # Or StackedInline for a different layout
+class VideoSourceInline(admin.TabularInline):
     model = VideoSource
-    extra = 0 # Number of empty forms to display
-    show_change_link = True # Link to the VideoSource change page
-    fields = ('platform_name', 'platform_video_id', 'original_url', 'processing_status', 'last_scraped_at', 'last_analyzed_at')
-    readonly_fields = ('last_scraped_at', 'last_analyzed_at') # Often set by system
-    ordering = ('-last_scraped_at',)
+    fk_name = 'video' # Explicitly define foreign key if not default
+    extra = 0  # Number of empty forms to display
+    show_change_link = True
+    fields = ('platform_name', 'platform_video_id', 'original_url', 'is_primary_source', 'meta_visual_processing_status', 'last_scraped_at')
+    readonly_fields = ('last_scraped_at',)
+    ordering = ('-created_at',)
+    verbose_name_plural = "Video Sources on Different Platforms"
+
 
 class TranscriptInline(admin.StackedInline): # Stacked for potentially larger text fields
     model = Transcript
     extra = 0
-    fields = ('language_code', 'full_text_content_preview', 'source_type', 'updated_at')
-    readonly_fields = ('updated_at', 'full_text_content_preview')
-    
-    def full_text_content_preview(self, obj):
-        # Provide a preview to avoid displaying massive text directly in inline
-        if obj.full_text_content:
-            return (obj.full_text_content[:200] + '...') if len(obj.full_text_content) > 200 else obj.full_text_content
+    fields = ('language_code', 'processing_status', 'transcript_text_content_preview', 'transcript_timed_json_preview', 'quality_score', 'updated_at')
+    readonly_fields = ('updated_at', 'transcript_text_content_preview', 'transcript_timed_json_preview')
+    verbose_name_plural = "Transcripts"
+
+    def transcript_text_content_preview(self, obj):
+        if obj.transcript_text_content:
+            return (obj.transcript_text_content[:150] + '...') if len(obj.transcript_text_content) > 150 else obj.transcript_text_content
         return "N/A"
-    full_text_content_preview.short_description = "Content Preview"
+    transcript_text_content_preview.short_description = "Text Preview"
+
+    def transcript_timed_json_preview(self, obj):
+        if obj.transcript_timed_json:
+            try:
+                # Show first few entries or a summary
+                data = obj.transcript_timed_json
+                if isinstance(data, list) and data:
+                    return f"~{len(data)} segments. First: {str(data[0])[:100]}..."
+                return (str(data)[:150] + '...') if len(str(data)) > 150 else str(data)
+            except Exception:
+                return "Error parsing JSON"
+        return "N/A"
+    transcript_timed_json_preview.short_description = "Timed JSON Preview"
 
 
 class ExtractedKeywordInline(admin.TabularInline):
     model = ExtractedKeyword
+    fk_name = 'transcript'
     extra = 0
-    fields = ('keyword_text', 'relevance_score', 'source_field')
+    fields = ('keyword_text', 'relevance_score')
     ordering = ('-relevance_score',)
+    verbose_name_plural = "Extracted Keywords"
+
 
 class VideoTopicInline(admin.TabularInline):
     model = VideoTopic
+    fk_name = 'transcript'
     extra = 0
-    fields = ('topic_name', 'confidence_score', 'modeling_method')
-    ordering = ('-confidence_score',)
+    fields = ('topic_label', 'topic_relevance_score')
+    ordering = ('-topic_relevance_score',)
+    verbose_name_plural = "Identified Topics"
+
 
 class VideoFrameFeatureInline(admin.TabularInline):
     model = VideoFrameFeature
+    fk_name = 'video_source'
     extra = 0
-    fields = ('timestamp_ms', 'feature_type', 'feature_data_preview')
-    readonly_fields = ('feature_data_preview',)
-    ordering = ('timestamp_ms',)
+    fields = ('timestamp_in_video_ms', 'feature_type', 'hash_value_preview', 'vector_db_id_status')
+    readonly_fields = ('hash_value_preview', 'vector_db_id_status')
+    ordering = ('timestamp_in_video_ms',)
+    verbose_name_plural = "Visual Frame Features"
 
-    def feature_data_preview(self, obj):
-        if obj.feature_data_json:
-            # Preview just a snippet of the JSON to keep inline clean
-            preview = str(obj.feature_data_json)[:100]
-            return (preview + '...') if len(str(obj.feature_data_json)) > 100 else preview
+    def hash_value_preview(self, obj):
+        if obj.hash_value:
+            return obj.hash_value[:30] + '...' if len(obj.hash_value) > 30 else obj.hash_value
         return "N/A"
-    feature_data_preview.short_description = "Feature Data"
+    hash_value_preview.short_description = "Hash Value"
+    
+    def vector_db_id_status(self,obj):
+        return "Set" if obj.vector_db_id else "Not Set"
+    vector_db_id_status.short_description = "In Vector DB?"
 
 
-class EditTaskInline(admin.TabularInline):
-    model = EditTask
-    extra = 0
-    fields = ('id', 'prompt_text_preview', 'status', 'result_media_path', 'created_at', 'updated_at')
-    readonly_fields = ('id', 'created_at', 'updated_at', 'prompt_text_preview')
-    show_change_link = True
-    ordering = ('-created_at',)
-
-    def prompt_text_preview(self, obj):
-        if obj.prompt_text:
-            return (obj.prompt_text[:100] + '...') if len(obj.prompt_text) > 100 else obj.prompt_text
-        return "N/A"
-    prompt_text_preview.short_description = "Prompt Preview"
-
-
-# --- ModelAdmins ---
-# These classes customize the Django admin interface for each model.
+# --- ModelAdmin Configurations ---
 
 @admin.register(Video)
 class VideoAdmin(admin.ModelAdmin):
-    list_display = ('id', 'title', 'duration_seconds', 'publication_date', 'category', 'deduplication_hash', 'created_at', 'updated_at')
-    list_filter = ('category', 'publication_date', 'created_at')
+    list_display = ('id', 'title_preview', 'duration_seconds', 'publication_date', 'deduplication_hash_short', 'source_count', 'created_at')
+    list_filter = ('publication_date', 'created_at')
     search_fields = ('title', 'description', 'deduplication_hash', 'id')
-    date_hierarchy = 'publication_date' # Useful for navigating by date
+    date_hierarchy = 'publication_date'
     readonly_fields = ('id', 'created_at', 'updated_at', 'deduplication_hash')
     fieldsets = (
         (None, {'fields': ('id', 'title', 'description')}),
-        ('Details', {'fields': ('duration_seconds', 'publication_date', 'tags', 'category')}),
+        ('Details', {'fields': ('duration_seconds', 'publication_date', 'primary_thumbnail_url')}),
         ('Internal', {'fields': ('deduplication_hash', 'created_at', 'updated_at')}),
     )
-    inlines = [VideoSourceInline] # Show related VideoSource instances
+    inlines = [VideoSourceInline]
+    list_per_page = 20
+
+    def title_preview(self, obj):
+        return (obj.title[:75] + '...') if len(obj.title) > 75 else obj.title
+    title_preview.short_description = 'Title'
+
+    def deduplication_hash_short(self, obj):
+        if obj.deduplication_hash:
+            return obj.deduplication_hash[:12] + '...'
+        return "N/A"
+    deduplication_hash_short.short_description = 'Dedupe Hash'
+
+    def source_count(self, obj):
+        return obj.sources.count()
+    source_count.short_description = '# Sources'
 
 
 @admin.register(VideoSource)
 class VideoSourceAdmin(admin.ModelAdmin):
-    list_display = ('id', 'video_title_link', 'platform_name', 'platform_video_id', 'processing_status', 'meta_visual_processing_status', 'last_scraped_at', 'last_analyzed_at')
-    list_filter = ('platform_name', 'processing_status', 'meta_visual_processing_status', 'last_scraped_at', 'last_analyzed_at')
+    list_display = ('id', 'video_link', 'platform_name', 'platform_video_id_short', 'is_primary_source', 'meta_visual_processing_status', 'last_scraped_at', 'transcript_count')
+    list_filter = ('platform_name', 'is_primary_source', 'meta_visual_processing_status', 'last_scraped_at')
     search_fields = ('video__title', 'platform_video_id', 'original_url', 'id', 'video__id')
-    raw_id_fields = ('video',) # Useful if you have many Video records
-    readonly_fields = ('id', 'created_at', 'updated_at', 'last_visual_indexed_at', 'last_analyzed_at')
-    list_select_related = ('video',) # Optimize query for list display
+    raw_id_fields = ('video',)
+    readonly_fields = ('id', 'created_at', 'updated_at', 'last_visual_indexed_at')
+    list_select_related = ('video',)
     fieldsets = (
         ('Linkage', {'fields': ('video',)}),
-        ('Platform Info', {'fields': ('id', 'platform_name', 'platform_video_id', 'original_url', 'embed_url', 'thumbnail_url')}),
-        ('Uploader & Stats', {'fields': ('uploader_name', 'uploader_url', 'view_count', 'like_count', 'comment_count')}),
-        ('Processing', {'fields': ('processing_status', 'processing_error_message', 'meta_visual_processing_status', 'meta_visual_processing_error')}),
-        ('Timestamps', {'fields': ('last_scraped_at', 'last_analyzed_at', 'last_visual_indexed_at', 'created_at', 'updated_at')}),
+        ('Platform Details', {'fields': ('id', 'platform_name', 'platform_video_id', 'original_url', 'embed_url', 'is_primary_source')}),
+        ('Metadata & Processing', {
+            'fields': ('source_metadata_json_pretty', 'last_scraped_at', 
+                       'meta_visual_processing_status', 'meta_visual_processing_error', 'last_visual_indexed_at')
+        }),
+        ('Timestamps', {'fields': ('created_at', 'updated_at')}),
     )
-    inlines = [TranscriptInline, ExtractedKeywordInline, VideoTopicInline, VideoFrameFeatureInline]
-    actions = ['mark_analysis_complete', 'reset_processing_status']
+    inlines = [TranscriptInline, VideoFrameFeatureInline] # Keywords & Topics are under Transcript
+    list_per_page = 20
+    actions = ['reset_visual_processing']
 
-    def video_title_link(self, obj):
-        from django.urls import reverse
-        from django.utils.html import format_html
+    def video_link(self, obj):
         if obj.video:
             link = reverse("admin:api_video_change", args=[obj.video.id])
-            return format_html('<a href="{}">{}</a>', link, obj.video.title)
+            title_preview = (obj.video.title[:30] + '...') if len(obj.video.title) > 30 else obj.video.title
+            return format_html('<a href="{}">{}</a>', link, title_preview)
         return "N/A"
-    video_title_link.short_description = 'Canonical Video Title'
-    video_title_link.admin_order_field = 'video__title'
+    video_link.short_description = 'Canonical Video'
+    video_link.admin_order_field = 'video__title'
 
-    def mark_analysis_complete(self, request, queryset):
-        updated_count = queryset.update(
-            processing_status='analysis_complete', 
-            meta_visual_processing_status='visual_processed',
-            last_analyzed_at=django_timezone.now(),
-            last_visual_indexed_at=django_timezone.now(),
-            processing_error_message=None,
-            meta_visual_processing_error=None
-        )
-        self.message_user(request, f"{updated_count} video sources marked as analysis complete.")
-    mark_analysis_complete.short_description = "Mark selected as 'Analysis Complete'"
+    def platform_video_id_short(self, obj):
+        return (obj.platform_video_id[:20] + '...') if len(obj.platform_video_id) > 20 else obj.platform_video_id
+    platform_video_id_short.short_description = 'Platform ID'
 
-    def reset_processing_status(self, request, queryset):
+    def transcript_count(self, obj):
+        return obj.transcripts.count()
+    transcript_count.short_description = '# Transcripts'
+
+    def source_metadata_json_pretty(self, obj):
+        if obj.source_metadata_json:
+            pretty_json = json.dumps(obj.source_metadata_json, indent=2, sort_keys=True)
+            return format_html("<pre style='white-space: pre-wrap; word-wrap: break-word; max-height: 300px; overflow-y: auto; border: 1px solid #ccc; padding: 5px;'>{}</pre>", pretty_json)
+        return "N/A"
+    source_metadata_json_pretty.short_description = "Source Metadata (JSON)"
+
+    def reset_visual_processing(self, request, queryset):
         updated_count = queryset.update(
-            processing_status='pending', 
             meta_visual_processing_status='pending',
-            last_analyzed_at=None,
-            last_visual_indexed_at=None,
-            processing_error_message=None,
-            meta_visual_processing_error=None
+            meta_visual_processing_error=None,
+            last_visual_indexed_at=None
         )
-        self.message_user(request, f"{updated_count} video sources reset to 'Pending' status.")
-    reset_processing_status.short_description = "Reset processing status to 'Pending'"
+        self.message_user(request, f"{updated_count} video sources reset for visual processing.")
+    reset_visual_processing.short_description = "Reset visual processing status to 'Pending'"
 
 
 @admin.register(Transcript)
 class TranscriptAdmin(admin.ModelAdmin):
-    list_display = ('id', 'video_source_info', 'language_code', 'source_type', 'content_preview', 'updated_at')
-    list_filter = ('language_code', 'source_type', 'updated_at')
-    search_fields = ('video_source__video__title', 'video_source__platform_video_id', 'full_text_content', 'id')
+    list_display = ('id', 'video_source_link', 'language_code', 'processing_status', 'quality_score', 'updated_at', 'keyword_topic_counts')
+    list_filter = ('language_code', 'processing_status', 'quality_score', 'updated_at')
+    search_fields = ('video_source__video__title', 'video_source__platform_video_id', 'transcript_text_content', 'id')
     raw_id_fields = ('video_source',)
     readonly_fields = ('id', 'created_at', 'updated_at')
-    list_select_related = ('video_source__video',)
+    fieldsets = (
+        (None, {'fields': ('id', 'video_source', 'language_code')}),
+        ('Content & Quality', {'fields': ('transcript_text_content', 'transcript_timed_json_pretty', 'quality_score')}),
+        ('Processing', {'fields': ('processing_status',)}),
+        ('Timestamps', {'fields': ('created_at', 'updated_at')}),
+    )
+    inlines = [ExtractedKeywordInline, VideoTopicInline]
+    list_select_related = ('video_source__video',) # For video_source_link
+    list_per_page = 20
 
-    def video_source_info(self, obj):
-        if obj.video_source and obj.video_source.video:
-            return f"VSID: {obj.video_source.id} (Video: {obj.video_source.video.title[:30]}...)"
-        return str(obj.video_source_id)
-    video_source_info.short_description = 'Video Source'
-
-    def content_preview(self, obj):
-        if obj.full_text_content:
-            return (obj.full_text_content[:100] + '...') if len(obj.full_text_content) > 100 else obj.full_text_content
+    def video_source_link(self, obj):
+        if obj.video_source:
+            link = reverse("admin:api_videosource_change", args=[obj.video_source.id])
+            return format_html('<a href="{}">VSID: {} ({})</a>', link, obj.video_source.id, obj.video_source.platform_name)
         return "N/A"
-    content_preview.short_description = 'Content Preview'
+    video_source_link.short_description = 'Video Source'
+    video_source_link.admin_order_field = 'video_source__id' # Allow sorting by this
 
+    def transcript_timed_json_pretty(self, obj):
+        if obj.transcript_timed_json:
+            pretty_json = json.dumps(obj.transcript_timed_json, indent=2)
+            return format_html("<pre style='white-space: pre-wrap; word-wrap: break-word; max-height: 300px; overflow-y: auto; border: 1px solid #ccc; padding: 5px;'>{}</pre>", pretty_json)
+        return "N/A"
+    transcript_timed_json_pretty.short_description = "Timed Transcript (JSON)"
+
+    def keyword_topic_counts(self, obj):
+        return f"KW: {obj.keywords.count()}, Topics: {obj.topics.count()}"
+    keyword_topic_counts.short_description = "Features"
 
 @admin.register(ExtractedKeyword)
 class ExtractedKeywordAdmin(admin.ModelAdmin):
-    list_display = ('id', 'video_source_id_link', 'keyword_text', 'relevance_score', 'source_field', 'created_at')
-    list_filter = ('source_field', 'created_at')
-    search_fields = ('keyword_text', 'video_source__id', 'video_source__video__title')
-    readonly_fields = ('id', 'created_at')
-    raw_id_fields = ('video_source',)
-    list_select_related = ('video_source',)
+    list_display = ('id', 'transcript_id_link', 'keyword_text', 'relevance_score')
+    search_fields = ('keyword_text', 'transcript__id', 'transcript__video_source__video__title')
+    list_filter = ('relevance_score',) # Could be by ranges if many
+    raw_id_fields = ('transcript',)
+    list_per_page = 50
+    ordering = ('-relevance_score', 'keyword_text')
 
-    def video_source_id_link(self, obj):
-         from django.urls import reverse
-         from django.utils.html import format_html
-         if obj.video_source:
-            link = reverse("admin:api_videosource_change", args=[obj.video_source.id])
-            return format_html('<a href="{}">{}</a>', link, obj.video_source.id)
-         return "N/A"
-    video_source_id_link.short_description = 'VideoSource ID'
+    def transcript_id_link(self, obj):
+        if obj.transcript:
+            link = reverse("admin:api_transcript_change", args=[obj.transcript.id])
+            return format_html('<a href="{}">TID: {}</a>', link, obj.transcript.id)
+        return "N/A"
+    transcript_id_link.short_description = 'Transcript ID'
 
 @admin.register(VideoTopic)
 class VideoTopicAdmin(admin.ModelAdmin):
-    list_display = ('id', 'video_source_id_link', 'topic_name', 'confidence_score', 'modeling_method', 'created_at')
-    list_filter = ('modeling_method', 'created_at')
-    search_fields = ('topic_name', 'video_source__id', 'video_source__video__title')
-    readonly_fields = ('id', 'created_at')
-    raw_id_fields = ('video_source',)
+    list_display = ('id', 'transcript_id_link', 'topic_label', 'topic_relevance_score')
+    search_fields = ('topic_label', 'transcript__id', 'transcript__video_source__video__title')
+    list_filter = ('topic_relevance_score',)
+    raw_id_fields = ('transcript',)
+    list_per_page = 50
+    ordering = ('-topic_relevance_score', 'topic_label')
 
-    def video_source_id_link(self, obj): # Duplicated from ExtractedKeywordAdmin - could be a mixin
-         from django.urls import reverse
-         from django.utils.html import format_html
-         if obj.video_source:
-            link = reverse("admin:api_videosource_change", args=[obj.video_source.id])
-            return format_html('<a href="{}">{}</a>', link, obj.video_source.id)
-         return "N/A"
-    video_source_id_link.short_description = 'VideoSource ID'
+    def transcript_id_link(self, obj): # Duplicated code, consider a mixin or helper
+        if obj.transcript:
+            link = reverse("admin:api_transcript_change", args=[obj.transcript.id])
+            return format_html('<a href="{}">TID: {}</a>', link, obj.transcript.id)
+        return "N/A"
+    transcript_id_link.short_description = 'Transcript ID'
+
 
 @admin.register(VideoFrameFeature)
 class VideoFrameFeatureAdmin(admin.ModelAdmin):
-    list_display = ('id', 'video_source_id_link', 'timestamp_ms', 'feature_type', 'data_preview', 'created_at')
+    list_display = ('id', 'video_source_link', 'timestamp_in_video_ms', 'feature_type', 'hash_value_preview', 'vector_db_id_status', 'created_at')
     list_filter = ('feature_type', 'created_at')
-    search_fields = ('video_source__id', 'video_source__video__title', 'feature_data_json') # Search in JSON data
-    readonly_fields = ('id', 'created_at')
+    search_fields = ('video_source__platform_video_id', 'video_source__video__title', 'hash_value', 'vector_db_id')
     raw_id_fields = ('video_source',)
+    readonly_fields = ('id', 'created_at', 'feature_data_json_pretty')
+    fieldsets = (
+        (None, {'fields': ('id', 'video_source', 'timestamp_in_video_ms', 'feature_type')}),
+        ('Feature Data', {'fields': ('frame_image_url', 'hash_value', 'feature_data_json_pretty', 'vector_db_id')}),
+        ('Timestamps', {'fields': ('created_at',)}),
+    )
     list_per_page = 25
+    list_select_related = ('video_source__video',) # For video_source_link
 
-    def video_source_id_link(self, obj): # Duplicated - make a mixin
-         from django.urls import reverse
-         from django.utils.html import format_html
-         if obj.video_source:
+    def video_source_link(self, obj):
+        if obj.video_source:
             link = reverse("admin:api_videosource_change", args=[obj.video_source.id])
-            return format_html('<a href="{}">{}</a>', link, obj.video_source.id)
-         return "N/A"
-    video_source_id_link.short_description = 'VideoSource ID'
-
-    def data_preview(self, obj):
-        if obj.feature_data_json:
-            preview = str(obj.feature_data_json)
-            return (preview[:75] + '...') if len(preview) > 75 else preview
+            return format_html('<a href="{}">VSID: {} ({})</a>', link, obj.video_source.id, obj.video_source.platform_video_id)
         return "N/A"
-    data_preview.short_description = 'Feature Data'
+    video_source_link.short_description = 'Video Source'
 
+    def hash_value_preview(self, obj):
+        if obj.hash_value:
+            return obj.hash_value[:20] + '...' if len(obj.hash_value) > 20 else obj.hash_value
+        return "N/A"
+    hash_value_preview.short_description = 'Hash'
 
-class UserProfileInline(admin.StackedInline): # Or TabularInline
-    model = UserProfile
-    can_delete = False # Usually don't want to delete UserProfile when deleting User
-    verbose_name_plural = 'Profile'
-    fk_name = 'user'
-    fields = ('subscription_plan', 'subscription_expiry_date', 'remaining_trial_searches')
+    def vector_db_id_status(self,obj):
+        return "Set" if obj.vector_db_id else "Not Set"
+    vector_db_id_status.short_description = "Vector DB ID"
 
-
-# Extend the default User admin to include UserProfile
-class CustomUserAdmin(BaseUserAdmin):
-    inlines = (UserProfileInline,)
-    list_display = ('username', 'email', 'first_name', 'last_name', 'is_staff', 'get_subscription_plan')
-    list_select_related = ('profile',) # For get_subscription_plan optimization
-
-    def get_subscription_plan(self, instance):
-        try:
-            return instance.profile.subscription_plan
-        except UserProfile.DoesNotExist:
-            return 'N/A'
-    get_subscription_plan.short_description = 'Subscription Plan'
-
-    def get_inline_instances(self, request, obj=None):
-        if not obj: # No inlines on user creation page
-            return []
-        return super().get_inline_instances(request, obj)
-
-# Unregister the original User admin if it's registered by default
-if admin.site.is_registered(User):
-    admin.site.unregister(User)
-# Register the User model with our custom admin
-admin.site.register(User, CustomUserAdmin)
+    def feature_data_json_pretty(self, obj):
+        if obj.feature_data_json:
+            pretty_json = json.dumps(obj.feature_data_json, indent=2)
+            return format_html("<pre style='white-space: pre-wrap; word-wrap: break-word; max-height: 200px; overflow-y: auto; border: 1px solid #ccc; padding: 5px;'>{}</pre>", pretty_json)
+        return "N/A"
+    feature_data_json_pretty.short_description = "Feature Data (JSON)"
 
 
 @admin.register(SearchTask)
 class SearchTaskAdmin(admin.ModelAdmin):
-    list_display = ('id', 'user_email', 'query_text_preview', 'query_image_ref_exists', 'status', 'celery_task_id', 'created_at', 'updated_at')
+    list_display = ('id', 'user_email', 'query_text_preview', 'status', 'created_at_time', 'updated_at_time')
     list_filter = ('status', 'created_at', 'user')
-    search_fields = ('id', 'user__email', 'user__username', 'query_text', 'celery_task_id')
-    readonly_fields = ('id', 'user', 'session_id', 'query_text', 'query_image_ref', 'query_image_fingerprint', 'query_video_url',
-                       'applied_filters_json', 'celery_task_id', 'result_video_ids_json', 'detailed_results_info_json_pretty',
-                       'created_at', 'updated_at')
+    search_fields = ('id__iexact', 'user__email', 'user__username', 'query_text', 'celery_task_id') # Use id__iexact for UUIDs if needed
+    readonly_fields = ('id', 'user', 'session_id', 'query_text', 'query_image_ref', 'query_image_fingerprint',
+                       'applied_filters_json_pretty', 'result_video_ids_json_pretty', 'detailed_results_info_json_pretty',
+                       'celery_task_id', 'error_message', 'created_at', 'updated_at')
+    fieldsets = (
+        ('Task Info', {'fields': ('id', 'user', 'session_id', 'status', 'celery_task_id')}),
+        ('Query', {'fields': ('query_text', 'query_image_ref', 'query_image_fingerprint', 'applied_filters_json_pretty')}),
+        ('Results & Errors', {'fields': ('result_video_ids_json_pretty', 'detailed_results_info_json_pretty', 'error_message')}),
+        ('Timestamps', {'fields': ('created_at', 'updated_at')}),
+    )
     list_per_page = 25
     ordering = ('-created_at',)
 
     def user_email(self, obj):
         return obj.user.email if obj.user else "Anonymous"
-    user_email.short_description = "User Email"
+    user_email.short_description = "User"
     user_email.admin_order_field = 'user__email'
 
     def query_text_preview(self, obj):
         if obj.query_text:
             return (obj.query_text[:75] + '...') if len(obj.query_text) > 75 else obj.query_text
         return "N/A"
-    query_text_preview.short_description = "Query Text"
-    
-    def query_image_ref_exists(self, obj):
-        return bool(obj.query_image_ref)
-    query_image_ref_exists.short_description = "Image Query?"
-    query_image_ref_exists.boolean = True
+    query_text_preview.short_description = "Query"
 
-    def detailed_results_info_json_pretty(self, obj):
-        import json
-        from django.utils.html import format_html
-        if obj.detailed_results_info_json:
-            pretty_json = json.dumps(obj.detailed_results_info_json, indent=2)
-            return format_html("<pre>{}</pre>", pretty_json)
+    def created_at_time(self,obj):
+        return obj.created_at.strftime("%Y-%m-%d %H:%M")
+    created_at_time.admin_order_field = 'created_at'
+    created_at_time.short_description = 'Created'
+
+    def updated_at_time(self,obj):
+        return obj.updated_at.strftime("%Y-%m-%d %H:%M")
+    updated_at_time.admin_order_field = 'updated_at'
+    updated_at_time.short_description = 'Updated'
+
+    def _pretty_json_field(self, obj_json_field, field_name):
+        if obj_json_field:
+            try:
+                pretty_json = json.dumps(obj_json_field, indent=2, sort_keys=True)
+                return format_html("<pre style='white-space: pre-wrap; word-wrap: break-word; max-height: 400px; overflow-y: auto; border: 1px solid #ccc; padding: 5px;'>{}</pre>", pretty_json)
+            except TypeError:
+                return str(obj_json_field) # Fallback if not serializable directly
         return "N/A"
-    detailed_results_info_json_pretty.short_description = "Detailed Results (Formatted)"
+
+    def applied_filters_json_pretty(self, obj):
+        return self._pretty_json_field(obj.applied_filters_json, "Applied Filters")
+    applied_filters_json_pretty.short_description = "Applied Filters (JSON)"
+
+    def result_video_ids_json_pretty(self, obj):
+        return self._pretty_json_field(obj.result_video_ids_json, "Result Video IDs")
+    result_video_ids_json_pretty.short_description = "Result Video IDs (JSON)"
+    
+    def detailed_results_info_json_pretty(self, obj):
+        return self._pretty_json_field(obj.detailed_results_info_json, "Detailed Results Info")
+    detailed_results_info_json_pretty.short_description = "Detailed Results Info (JSON)"
 
 
 @admin.register(SignupCode)
 class SignupCodeAdmin(admin.ModelAdmin):
-    list_display = ('id', 'email', 'code', 'plan_name', 'is_used', 'used_by_email', 'is_expired', 'expires_at', 'created_at')
+    list_display = ('id', 'email', 'code', 'plan_name', 'is_used', 'user_activated_email', 'expires_at_display', 'created_at')
     list_filter = ('is_used', 'plan_name', 'expires_at', 'created_at')
-    search_fields = ('id', 'email', 'code', 'used_by__email')
-    readonly_fields = ('id', 'created_at', 'updated_at', 'used_at')
-    actions = ['mark_as_used', 'mark_as_unused']
-    
-    def used_by_email(self, obj):
-        return obj.used_by.email if obj.used_by else "N/A"
-    used_by_email.short_description = "Used By"
-
-    def mark_as_used(self, request, queryset):
-        # Note: Doesn't assign a user, just marks the flag. Real usage flow is via ActivateAccountView.
-        updated_count = queryset.update(is_used=True, used_at=django_timezone.now())
-        self.message_user(request, f"{updated_count} signup codes marked as used.")
-    mark_as_used.short_description = "Mark selected codes as USED"
-
-    def mark_as_unused(self, request, queryset):
-        updated_count = queryset.update(is_used=False, used_at=None, used_by=None)
-        self.message_user(request, f"{updated_count} signup codes marked as UNUSED.")
-    mark_as_unused.short_description = "Mark selected codes as UNUSED"
-
-
-@admin.register(VideoEditProject)
-class VideoEditProjectAdmin(admin.ModelAdmin):
-    list_display = ('id', 'user_email', 'project_name', 'original_video_source_id_link', 'uploaded_video_name', 'created_at')
-    list_filter = ('created_at', 'user')
-    search_fields = ('id', 'project_name', 'user__email', 'original_video_source__id', 'uploaded_video_name')
-    raw_id_fields = ('user', 'original_video_source')
+    search_fields = ('id__iexact', 'email', 'code', 'user_activated__email')
     readonly_fields = ('id', 'created_at', 'updated_at')
-    inlines = [EditTaskInline]
+    actions = ['mark_as_unused_admin'] # 'mark_as_used' might be too risky without user context.
+    list_per_page = 25
     ordering = ('-created_at',)
 
-    def user_email(self, obj):
-        return obj.user.email if obj.user else "N/A"
-    user_email.short_description = "User"
+    def user_activated_email(self, obj):
+        return obj.user_activated.email if obj.user_activated else "Not Activated"
+    user_activated_email.short_description = "Activated By"
 
-    def original_video_source_id_link(self, obj):
-         from django.urls import reverse
-         from django.utils.html import format_html
-         if obj.original_video_source:
-            link = reverse("admin:api_videosource_change", args=[obj.original_video_source.id])
-            return format_html('<a href="{}">VSID: {}</a>', link, obj.original_video_source.id)
-         return "N/A"
-    original_video_source_id_link.short_description = 'Original VideoSource'
+    def expires_at_display(self, obj):
+        return obj.expires_at.strftime("%Y-%m-%d %H:%M") if obj.expires_at else "N/A"
+    expires_at_display.short_description = "Expires At"
+    expires_at_display.admin_order_field = 'expires_at'
 
-
-@admin.register(EditTask)
-class EditTaskAdmin(admin.ModelAdmin):
-    list_display = ('id', 'project_link', 'prompt_preview', 'status', 'celery_task_id', 'created_at', 'updated_at')
-    list_filter = ('status', 'created_at')
-    search_fields = ('id', 'project__project_name', 'project__user__email', 'prompt_text', 'celery_task_id')
-    raw_id_fields = ('project',)
-    readonly_fields = ('id', 'celery_task_id', 'created_at', 'updated_at', 'result_media_path', 'result_preview_url', 'error_message')
-    list_select_related = ('project__user',)
-    ordering = ('-created_at',)
-
-    def project_link(self, obj):
-        from django.urls import reverse
-        from django.utils.html import format_html
-        if obj.project:
-            link = reverse("admin:api_videoeditproject_change", args=[obj.project.id])
-            return format_html('<a href="{}">Project {} ({})</a>', link, obj.project.id, obj.project.project_name[:20])
-        return "N/A"
-    project_link.short_description = 'Edit Project'
-
-    def prompt_preview(self, obj):
-        if obj.prompt_text:
-            return (obj.prompt_text[:75] + '...') if len(obj.prompt_text) > 75 else obj.prompt_text
-        return "N/A"
-    prompt_preview.short_description = "Prompt"
-
-# Note: For UserProfile to appear under the User admin, the User model itself
-# needs to be re-registered with an admin class that includes UserProfileInline.
-# This was done above with CustomUserAdmin.
+    def mark_as_unused_admin(self, request, queryset):
+        updated_count = queryset.update(is_used=False, user_activated=None)
+        self.message_user(request, f"{updated_count} signup codes marked as UNUSED and
