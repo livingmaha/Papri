@@ -189,7 +189,7 @@ RATELIMIT_DEFAULTS = {
     'api_general_read': os.getenv('RATELIMIT_API_GENERAL_READ', '300/m'),
     'auth_actions': os.getenv('RATELIMIT_AUTH_ACTIONS', '30/m'),
     'payments_initiate': os.getenv('RATELIMIT_PAYMENTS_INITIATE', '10/h'),
-    'paystack_webhook': os.getenv('RATELIMIT_PAYSTACK_WEBHOOK', '60/m'), # Rate limit for incoming webhooks per IP
+    'paystack_webhook': os.getenv('RATELIMIT_PAYSTACK_WEBHOOK', '60/m'),
 }
 RATELIMIT_KEYS = {
     'api_search_initiate': user_or_ip_key,
@@ -197,7 +197,7 @@ RATELIMIT_KEYS = {
     'api_general_read': ip_key,
     'auth_actions': ip_key,
     'payments_initiate': user_or_ip_key,
-    'paystack_webhook': ip_key, # Key webhooks by IP
+    'paystack_webhook': ip_key,
 }
 
 CORS_ALLOW_CREDENTIALS = True
@@ -229,15 +229,13 @@ VIMEO_CLIENT_ID = os.getenv('VIMEO_CLIENT_ID')
 VIMEO_CLIENT_SECRET = os.getenv('VIMEO_CLIENT_SECRET')
 VIMEO_ACCESS_TOKEN = os.getenv('VIMEO_ACCESS_TOKEN')
 DAILYMOTION_API_URL = os.getenv('DAILYMOTION_API_URL', 'https://api.dailymotion.com')
-
 PAYSTACK_SECRET_KEY = os.getenv('PAYSTACK_SECRET_KEY')
 PAYSTACK_PUBLIC_KEY = os.getenv('PAYSTACK_PUBLIC_KEY')
-PAYSTACK_WEBHOOK_SECRET = os.getenv('PAYSTACK_WEBHOOK_SECRET') # ADDED for webhook signature verification
+PAYSTACK_WEBHOOK_SECRET = os.getenv('PAYSTACK_WEBHOOK_SECRET')
 PAYSTACK_CALLBACK_URL_NAME = 'payments:paystack_callback'
 PAYMENT_SUCCESS_REDIRECT_URL = os.getenv('PAYMENT_SUCCESS_REDIRECT_URL', '/app/#payment-success')
 PAYMENT_FAILED_REDIRECT_URL = os.getenv('PAYMENT_FAILED_REDIRECT_URL', '/app/#payment-failed')
 SIGNUP_CODE_EXPIRY_DAYS = int(os.getenv('SIGNUP_CODE_EXPIRY_DAYS', 7))
-
 QDRANT_HOST = os.getenv('QDRANT_HOST', 'localhost')
 QDRANT_PORT = int(os.getenv('QDRANT_PORT', 6333))
 QDRANT_GRPC_PORT = int(os.getenv('QDRANT_GRPC_PORT', 6334))
@@ -249,14 +247,12 @@ QDRANT_TRANSCRIPT_COLLECTION_NAME = os.getenv('QDRANT_TRANSCRIPT_COLLECTION_NAME
 QDRANT_VISUAL_COLLECTION_NAME = os.getenv('QDRANT_VISUAL_COLLECTION_NAME', 'papri_visuals_v1')
 TEXT_EMBEDDING_DIMENSION = int(os.getenv('TEXT_EMBEDDING_DIMENSION', 384))
 IMAGE_EMBEDDING_DIMENSION = int(os.getenv('IMAGE_EMBEDDING_DIMENSION', 1280))
-
 SENTENCE_TRANSFORMER_MODEL = os.getenv('SENTENCE_TRANSFORMER_MODEL', 'all-MiniLM-L6-v2')
 VISUAL_CNN_MODEL_NAME = os.getenv('VISUAL_CNN_MODEL_NAME', 'EfficientNetV2S')
-SPACY_MODEL_NAME = os.getenv('SPACY_MODEL_NAME', "en_core_web_sm")
+SPACY_MODEL_NAME = os.getenv('SPACY_MODEL_NAME', "en_core_web_sm") # Added from previous work
 MOVIEPY_THREADS = int(os.getenv('MOVIEPY_THREADS', 4))
 MOVIEPY_PRESET = os.getenv('MOVIEPY_PRESET', 'medium')
 PYSCENEDETECT_THRESHOLD = float(os.getenv('PYSCENEDETECT_THRESHOLD', 27.0))
-
 MAX_API_RESULTS_PER_SOURCE = int(os.getenv('MAX_API_RESULTS_PER_SOURCE', 10))
 MAX_SCRAPED_ITEMS_PER_SOURCE = int(os.getenv('MAX_SCRAPED_ITEMS_PER_SOURCE', 5))
 SCRAPE_INTER_PLATFORM_DELAY_SECONDS = int(os.getenv('SCRAPE_INTER_PLATFORM_DELAY_SECONDS', 2))
@@ -269,6 +265,29 @@ except json.JSONDecodeError:
     if DEBUG:
         SCRAPEABLE_PLATFORMS_CONFIG.append({'name': 'PeerTube_Tilvids_Dev_Example', 'spider_name': 'peertube', 'base_url': 'https://tilvids.com', 'search_path_template': '/api/v1/search/videos?search={query}&count={max_results}&sort=-match', 'default_listing_url': 'https://tilvids.com/videos/recently-added', 'is_active': True, 'platform_identifier': 'peertube_tilvids'})
         print("Warning: SCRAPEABLE_PLATFORMS_JSON not found or invalid. Using default dev config.")
+
+# --- BEGIN: Scraping Robustness Settings ---
+# User Agents for Scrapy
+# Option 1: Define a list of user agents (can be extensive)
+USER_AGENT_LIST_JSON = os.getenv('USER_AGENT_LIST_JSON', '["Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.107 Safari/537.36", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36"]')
+try:
+    USER_AGENT_LIST = json.loads(USER_AGENT_LIST_JSON)
+except json.JSONDecodeError:
+    USER_AGENT_LIST = ["PapriSearchBot/1.0 (+http://yourpaprisite.com/bot-info)"] # Fallback
+DEFAULT_USER_AGENT = os.getenv('DEFAULT_USER_AGENT', USER_AGENT_LIST[0])
+
+# Proxy Settings for Scrapy (examples, integrate with a real proxy service)
+# Option 1: Single proxy
+HTTP_PROXY = os.getenv('HTTP_PROXY', None) # e.g., 'http://user:pass@host:port'
+HTTPS_PROXY = os.getenv('HTTPS_PROXY', None) # e.g., 'http://user:pass@host:port'
+
+# Option 2: Proxy list for rotation (e.g., from a file or env var)
+PROXY_LIST_JSON = os.getenv('PROXY_LIST_JSON', '[]') # e.g., '["http://proxy1", "http://proxy2"]'
+try:
+    PROXY_LIST = json.loads(PROXY_LIST_JSON)
+except json.JSONDecodeError:
+    PROXY_LIST = []
+# --- END: Scraping Robustness Settings ---
 
 EMAIL_BACKEND = os.getenv('EMAIL_BACKEND', 'django.core.mail.backends.console.EmailBackend')
 EMAIL_HOST = os.getenv('EMAIL_HOST')
