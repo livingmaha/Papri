@@ -1,4 +1,6 @@
 #!/bin/sh
+# NOTE: This script must be saved with LF (Unix) line endings to work correctly inside the container.
+# The .gitattributes file in the repo root should enforce this.
 # backend/docker-entrypoint.sh
 
 set -e # Exit immediately if a command exits with a non-zero status.
@@ -23,4 +25,4 @@ python manage.py compress --force
 
 # Start the main process (Gunicorn, Celery worker, etc.) passed as CMD
 echo "Starting main process: <span class="math-inline">@"
-exe<15\>c "</span>@"
+exec "</span>@"
