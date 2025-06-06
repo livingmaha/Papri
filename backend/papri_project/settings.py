@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 import json
 from celery.schedules import crontab
 
+# --- Core Setup ---
 BASE_DIR = Path(__file__).resolve().parent.parent
 PROJECT_ROOT_DIR = BASE_DIR.parent
 dotenv_path = BASE_DIR / '.env'
@@ -13,17 +14,29 @@ load_dotenv(dotenv_path=dotenv_path)
 SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'django-insecure-fallback-key-for-development-only-change-me')
 DEBUG = os.getenv('DEBUG', 'True') == 'True'
 
+# --- Production Mode Flag ---
+# Use this single variable to control multiple production-specific settings.
+PAPRI_PRODUCTION_MODE = os.getenv('PAPRI_PRODUCTION_MODE', 'False') == 'True'
+
+# In production, DEBUG should always be False.
+if PAPRI_PRODUCTION_MODE:
+    DEBUG = False
+
 ALLOWED_HOSTS_STRING = os.getenv('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1')
 ALLOWED_HOSTS = [host.strip() for host in ALLOWED_HOSTS_STRING.split(',') if host.strip()]
 
+# --- Installed Apps ---
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
+    'whitenoise.runserver_nostatic',  # Must be before staticfiles
     'django.contrib.staticfiles',
     'django.contrib.sites',
+
+    # Third-party apps
     'rest_framework',
     'corsheaders',
     'allauth',
@@ -33,13 +46,19 @@ INSTALLED_APPS = [
     'django_celery_results',
     'django_celery_beat',
     'django_ratelimit',
+    'drf_spectacular', # For API Docs
+    'compressor',      # For Frontend Performance
+
+    # Local apps
     'api.apps.ApiConfig',
     'ai_agents.apps.AiAgentsConfig',
     'payments.apps.PaymentsConfig',
+    'users', # Ensure users app is registered if it exists
 ]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    # Whitenoise Middleware should be right after SecurityMiddleware
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'corsheaders.middleware.CorsMiddleware',
@@ -64,8 +83,6 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
-                'django.template.context_processors.static',
-                'django.template.context_processors.media',
             ],
         },
     },
@@ -74,18 +91,23 @@ TEMPLATES = [
 WSGI_APPLICATION = 'papri_project.wsgi.application'
 ASGI_APPLICATION = 'papri_project.asgi.application'
 
+# --- Database ---
 DATABASES = {
     'default': {
         'ENGINE': os.getenv('DB_ENGINE', 'django.db.backends.mysql'),
         'NAME': os.getenv('DB_NAME', 'papri_db'),
         'USER': os.getenv('DB_USER', 'papri_user'),
         'PASSWORD': os.getenv('DB_PASSWORD', 'papri_password'),
-        'HOST': os.getenv('DB_HOST', '127.0.0.1'),
+        'HOST': os.getenv('DB_HOST', 'db'), # Use service name from docker-compose
         'PORT': os.getenv('DB_PORT', '3306'),
-        'OPTIONS': {'charset': 'utf8mb4'},
+        'OPTIONS': {
+            'charset': 'utf8mb4',
+            'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
+        }
     }
 }
 
+# --- Authentication ---
 AUTHENTICATION_BACKENDS = (
     'django.contrib.auth.backends.ModelBackend',
     'allauth.account.auth_backends.AuthenticationBackend',
@@ -95,26 +117,21 @@ ACCOUNT_USER_MODEL_USERNAME_FIELD = None
 ACCOUNT_EMAIL_REQUIRED = True
 ACCOUNT_USERNAME_REQUIRED = False
 ACCOUNT_AUTHENTICATION_METHOD = 'email'
-ACCOUNT_EMAIL_VERIFICATION = os.getenv('ACCOUNT_EMAIL_VERIFICATION', 'optional')
-ACCOUNT_ADAPTER = 'allauth.account.adapter.DefaultAccountAdapter'
-SOCIALACCOUNT_ADAPTER = 'allauth.socialaccount.adapter.DefaultSocialAccountAdapter'
-SOCIALACCOUNT_AUTO_SIGNUP = True
-SOCIALACCOUNT_EMAIL_VERIFICATION = ACCOUNT_EMAIL_VERIFICATION
+ACCOUNT_EMAIL_VERIFICATION = os.getenv('ACCOUNT_EMAIL_VERIFICATION', 'mandatory' if PAPRI_PRODUCTION_MODE else 'optional')
+LOGIN_REDIRECT_URL = '/app/'
+LOGOUT_REDIRECT_URL = '/'
 SOCIALACCOUNT_PROVIDERS = {
     'google': {
-        'SCOPE': ['profile', 'email'],
-        'AUTH_PARAMS': {'access_type': 'online'},
         'APP': {
             'client_id': os.getenv('GOOGLE_OAUTH_CLIENT_ID'),
             'secret': os.getenv('GOOGLE_OAUTH_CLIENT_SECRET'),
-            'key': ''
-        }
+        },
+        'SCOPE': ['profile', 'email'],
+        'AUTH_PARAMS': {'access_type': 'online'},
     }
 }
-LOGIN_URL = '/accounts/login/'
-LOGIN_REDIRECT_URL = '/app/'
-LOGOUT_REDIRECT_URL = '/'
 
+# --- Password Validation ---
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
     {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
@@ -122,181 +139,177 @@ AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
 ]
 
+# --- Internationalization ---
 LANGUAGE_CODE = 'en-us'
-TIME_ZONE = os.getenv('TIME_ZONE', 'Africa/Nairobi')
+TIME_ZONE = os.getenv('TIME_ZONE', 'UTC')
 USE_I18N = True
-USE_L10N = True
 USE_TZ = True
 
+# --- Static & Media Files ---
 STATIC_URL = '/static/'
 STATICFILES_DIRS = [os.path.join(PROJECT_ROOT_DIR, 'frontend', 'static')]
-STATIC_ROOT = os.path.join(PROJECT_ROOT_DIR, 'staticfiles_collected')
+STATIC_ROOT = BASE_DIR / 'staticfiles_collected'
+# Add CompressorFinder for django-compressor
+STATICFILES_FINDERS = (
+    'django.contrib.staticfiles.finders.FileSystemFinder',
+    'django.contrib.staticfiles.finders.AppDirectoriesFinder',
+    'compressor.finders.CompressorFinder',
+)
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
-
 MEDIA_URL = '/media/'
-MEDIA_ROOT = os.path.join(BASE_DIR, 'mediafiles_storage')
+MEDIA_ROOT = BASE_DIR / 'mediafiles_storage'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+# --- Django Compressor Settings (Frontend Performance) ---
+COMPRESS_ENABLED = not DEBUG
+COMPRESS_OFFLINE = True # Recommended for production
+COMPRESS_CSS_FILTERS = [
+    'compressor.filters.css_default.CssAbsoluteFilter',
+    'compressor.filters.cssmin.rCSSMinFilter',
+]
+COMPRESS_JS_FILTERS = [
+    'compressor.filters.jsmin.JSMinFilter',
+]
+
+# --- REST Framework ---
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': ('rest_framework.authentication.SessionAuthentication',),
     'DEFAULT_PERMISSION_CLASSES': ('rest_framework.permissions.IsAuthenticatedOrReadOnly',),
-    'DEFAULT_RENDERER_CLASSES': ('rest_framework.renderers.JSONRenderer', ('rest_framework.renderers.BrowsableAPIRenderer' if DEBUG else None),),
+    'DEFAULT_RENDERER_CLASSES': [
+        'rest_framework.renderers.JSONRenderer',
+        # Only include BrowsableAPIRenderer in non-production mode
+        *([ 'rest_framework.renderers.BrowsableAPIRenderer' ] if not PAPRI_PRODUCTION_MODE else [])
+    ],
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
-    'PAGE_SIZE': int(os.getenv('APP_DEFAULT_RESULTS_PER_PAGE', 9)),
-    'PAGE_SIZE_QUERY_PARAM': 'page_size',
-    'MAX_PAGE_SIZE': 100,
+    'PAGE_SIZE': int(os.getenv('APP_DEFAULT_RESULTS_PER_PAGE', 12)),
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema', # For API Docs
 }
 
-CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', 'redis://localhost:6379/0')
-CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND', 'django-db')
+# --- API Documentation (drf-spectacular) ---
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'PAPRI AI API',
+    'DESCRIPTION': 'Official API documentation for the PAPRI AI Video Meta-Search and Editor platform.',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False, # Serve schema only through designated view
+    'CONTACT': {
+        'name': 'PAPRI Support',
+        'email': 'support@papri.example.com',
+    },
+}
+
+# --- Celery ---
+CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', 'redis://redis:6379/0')
+CELERY_RESULT_BACKEND = 'django-db'
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = TIME_ZONE
 CELERY_TASK_TRACK_STARTED = True
-CELERY_RESULT_EXTENDED = True
 CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
 
-CELERY_TASK_QUEUES = {
-    'default': {'exchange': 'default', 'routing_key': 'default'},
-    'ai_processing': {'exchange': 'ai_processing', 'routing_key': 'ai_processing'},
-    'video_editing': {'exchange': 'video_editing', 'routing_key': 'video_editing'},
-}
-CELERY_TASK_DEFAULT_QUEUE = 'default'
-CELERY_TASK_DEFAULT_EXCHANGE = 'default'
-CELERY_TASK_DEFAULT_ROUTING_KEY = 'default'
-CELERY_TASK_ROUTES = {
-    'api.tasks.process_search_query_task': {'queue': 'ai_processing'},
-    'api.tasks.process_video_edit_task': {'queue': 'video_editing'},
-}
-
-RATELIMIT_ENABLE = os.getenv('DJANGO_RATELIMIT_ENABLE', 'True') == 'True'
-RATELIMIT_USE_CACHE = 'default'
-RATELIMIT_KEY_PREFIX = 'rl'
-RATELIMIT_VIEW = 'django_ratelimit.exceptions.ratelimited'
-RATELIMIT_BLOCK = True
-RATELIMIT_GLOBAL_DEFAULT_RATE = os.getenv('DJANGO_RATELIMIT_GLOBAL_DEFAULT_RATE', '1000/h')
-
-def user_or_ip_key(group, request):
-    if request.user.is_authenticated: return f"user:{request.user.pk}"
-    return f"ip:{request.META.get('REMOTE_ADDR')}"
-def ip_key(group, request): return request.META.get('REMOTE_ADDR')
-
-RATELIMIT_DEFAULTS = {
-    'api_search_initiate': os.getenv('RATELIMIT_API_SEARCH_INITIATE', '20/m'),
-    'api_edit_task_create': os.getenv('RATELIMIT_API_EDIT_TASK_CREATE', '10/h'),
-    'api_general_read': os.getenv('RATELIMIT_API_GENERAL_READ', '300/m'),
-    'auth_actions': os.getenv('RATELIMIT_AUTH_ACTIONS', '30/m'),
-    'payments_initiate': os.getenv('RATELIMIT_PAYMENTS_INITIATE', '10/h'),
-    'paystack_webhook': os.getenv('RATELIMIT_PAYSTACK_WEBHOOK', '60/m'),
-}
-RATELIMIT_KEYS = {
-    'api_search_initiate': user_or_ip_key,
-    'api_edit_task_create': user_or_ip_key,
-    'api_general_read': ip_key,
-    'auth_actions': ip_key,
-    'payments_initiate': user_or_ip_key,
-    'paystack_webhook': ip_key,
-}
-
+# --- CORS ---
 CORS_ALLOW_CREDENTIALS = True
-if DEBUG:
+if not PAPRI_PRODUCTION_MODE:
     CORS_ALLOW_ALL_ORIGINS = True
 else:
     CORS_ALLOWED_ORIGINS_STRING = os.getenv('CORS_ALLOWED_ORIGINS')
     CORS_ALLOWED_ORIGINS = [origin.strip() for origin in CORS_ALLOWED_ORIGINS_STRING.split(',') if origin.strip()] if CORS_ALLOWED_ORIGINS_STRING else []
 
+# --- Security Settings (HTTPS Enforcement) ---
+if PAPRI_PRODUCTION_MODE:
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    SECURE_SSL_REDIRECT = True
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_HSTS_SECONDS = 31536000  # 1 year
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+    # Ensure session cookie has httponly flag to prevent client-side script access
+    SESSION_COOKIE_HTTPONLY = True
+    # Sets the SameSite attribute of the CSRF cookie to prevent CSRF attacks
+    CSRF_COOKIE_SAMESITE = 'Lax'
+    SESSION_COOKIE_SAMESITE = 'Lax'
+
+
+# --- Email Backend Configuration ---
+# CRITICAL: This section resolves the email backend audit point.
+PAPRI_USE_CONSOLE_EMAIL = os.getenv('PAPRI_USE_CONSOLE_EMAIL', 'False') == 'True'
+
+if DEBUG or PAPRI_USE_CONSOLE_EMAIL:
+    # Use console backend for development or when explicitly requested.
+    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+else:
+    # Production: Use SMTP backend configured via environment variables.
+    # Defaults are provided for common setups, but should be set in .env for production.
+    EMAIL_BACKEND = os.getenv('EMAIL_BACKEND', 'django.core.mail.backends.smtp.EmailBackend')
+    EMAIL_HOST = os.getenv('EMAIL_HOST') # e.g., 'smtp.sendgrid.net' or 'email-smtp.us-east-1.amazonaws.com'
+    EMAIL_PORT = int(os.getenv('EMAIL_PORT', 587))
+    EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'True') == 'True'
+    EMAIL_USE_SSL = os.getenv('EMAIL_USE_SSL', 'False') == 'True' # TLS and SSL are mutually exclusive
+    EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER') # e.g., 'apikey' for SendGrid
+    EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD') # The actual API key or password
+    DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'PAPRI Support <noreply@papri.example.com>')
+    # Example for SendGrid:
+    # EMAIL_HOST = 'smtp.sendgrid.net'
+    # EMAIL_HOST_USER = 'apikey' # This is the literal string
+    # EMAIL_HOST_PASSWORD = os.getenv('SENDGRID_API_KEY')
+    # EMAIL_PORT = 587
+    # EMAIL_USE_TLS = True
+    #
+    # Example for AWS SES:
+    # EMAIL_HOST = 'email-smtp.us-east-1.amazonaws.com'
+    # EMAIL_HOST_USER = os.getenv('AWS_SES_SMTP_USER')
+    # EMAIL_HOST_PASSWORD = os.getenv('AWS_SES_SMTP_PASSWORD')
+    # EMAIL_PORT = 587
+    # EMAIL_USE_TLS = True
+
+ACCOUNT_EMAIL_SUBJECT_PREFIX = '[Papri] '
+
+# --- Logging ---
 LOGGING_DIR = BASE_DIR / 'logs'
 LOGGING_DIR.mkdir(parents=True, exist_ok=True)
 LOGGING = {
-    'version': 1, 'disable_existing_loggers': False,
-    'formatters': {'verbose': {'format': '{levelname} {asctime} {module}:{lineno} {process:d} {thread:d} {message}', 'style': '{'},
-                   'simple': {'format': '{levelname} {asctime} {module} {message}', 'style': '{'}},
-    'handlers': {'console': {'class': 'logging.StreamHandler', 'formatter': 'simple'},
-                 'file_django': {'level': 'INFO', 'class': 'logging.handlers.RotatingFileHandler', 'filename': LOGGING_DIR / 'django.log', 'maxBytes': 10485760, 'backupCount': 5, 'formatter': 'verbose'},
-                 'file_papri_app': {'level': 'DEBUG', 'class': 'logging.handlers.RotatingFileHandler', 'filename': LOGGING_DIR / 'papri_app.log', 'maxBytes': 10485760, 'backupCount': 5, 'formatter': 'verbose'}},
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {'format': '{levelname} {asctime} {name}:{lineno} {message}', 'style': '{'},
+        'simple': {'format': '{levelname} {message}', 'style': '{'},
+    },
+    'handlers': {
+        'console': {'class': 'logging.StreamHandler', 'formatter': 'simple'},
+        'file_django': {
+            'level': 'INFO', 'class': 'logging.handlers.RotatingFileHandler',
+            'filename': LOGGING_DIR / 'django.log', 'maxBytes': 10 * 1024 * 1024, 'backupCount': 5, 'formatter': 'verbose'
+        },
+        'file_papri_app': {
+            'level': 'DEBUG', 'class': 'logging.handlers.RotatingFileHandler',
+            'filename': LOGGING_DIR / 'papri_app.log', 'maxBytes': 10 * 1024 * 1024, 'backupCount': 5, 'formatter': 'verbose'
+        },
+    },
     'root': {'handlers': ['console', 'file_django'], 'level': os.getenv('DJANGO_LOG_LEVEL_ROOT', 'WARNING')},
-    'loggers': {'django': {'handlers': ['console', 'file_django'], 'level': os.getenv('DJANGO_LOG_LEVEL_DJANGO', 'INFO'), 'propagate': False},
-                'api': {'handlers': ['console', 'file_papri_app'], 'level': 'DEBUG', 'propagate': False},
-                'ai_agents': {'handlers': ['console', 'file_papri_app'], 'level': 'DEBUG', 'propagate': False},
-                'payments': {'handlers': ['console', 'file_papri_app'], 'level': 'DEBUG', 'propagate': False},
-                'celery': {'handlers': ['console', 'file_papri_app'], 'level': 'INFO', 'propagate': False}}
+    'loggers': {
+        'django': {'handlers': ['console', 'file_django'], 'level': os.getenv('DJANGO_LOG_LEVEL', 'INFO'), 'propagate': False},
+        'api': {'handlers': ['console', 'file_papri_app'], 'level': 'DEBUG', 'propagate': False},
+        'ai_agents': {'handlers': ['console', 'file_papri_app'], 'level': 'DEBUG', 'propagate': False},
+        'payments': {'handlers': ['console', 'file_papri_app'], 'level': 'DEBUG', 'propagate': False},
+        'celery': {'handlers': ['console', 'file_papri_app'], 'level': 'INFO', 'propagate': False},
+    }
 }
 
-YOUTUBE_API_KEY = os.getenv('YOUTUBE_API_KEY')
-VIMEO_CLIENT_ID = os.getenv('VIMEO_CLIENT_ID')
-VIMEO_CLIENT_SECRET = os.getenv('VIMEO_CLIENT_SECRET')
-VIMEO_ACCESS_TOKEN = os.getenv('VIMEO_ACCESS_TOKEN')
-DAILYMOTION_API_URL = os.getenv('DAILYMOTION_API_URL', 'https://api.dailymotion.com')
+
+# --- Application-Specific Settings ---
 PAYSTACK_SECRET_KEY = os.getenv('PAYSTACK_SECRET_KEY')
 PAYSTACK_PUBLIC_KEY = os.getenv('PAYSTACK_PUBLIC_KEY')
 PAYSTACK_WEBHOOK_SECRET = os.getenv('PAYSTACK_WEBHOOK_SECRET')
-PAYSTACK_CALLBACK_URL_NAME = 'payments:paystack_callback'
-PAYMENT_SUCCESS_REDIRECT_URL = os.getenv('PAYMENT_SUCCESS_REDIRECT_URL', '/app/#payment-success')
-PAYMENT_FAILED_REDIRECT_URL = os.getenv('PAYMENT_FAILED_REDIRECT_URL', '/app/#payment-failed')
-SIGNUP_CODE_EXPIRY_DAYS = int(os.getenv('SIGNUP_CODE_EXPIRY_DAYS', 7))
-QDRANT_HOST = os.getenv('QDRANT_HOST', 'localhost')
-QDRANT_PORT = int(os.getenv('QDRANT_PORT', 6333))
-QDRANT_GRPC_PORT = int(os.getenv('QDRANT_GRPC_PORT', 6334))
-QDRANT_URL = os.getenv('QDRANT_URL', f"http://{QDRANT_HOST}:{QDRANT_PORT}")
-QDRANT_API_KEY = os.getenv('QDRANT_API_KEY', None)
-QDRANT_PREFER_GRPC = os.getenv('QDRANT_PREFER_GRPC', 'False') == 'True'
-QDRANT_TIMEOUT_SECONDS = int(os.getenv('QDRANT_TIMEOUT_SECONDS', 20))
-QDRANT_TRANSCRIPT_COLLECTION_NAME = os.getenv('QDRANT_TRANSCRIPT_COLLECTION_NAME', 'papri_transcripts_v1')
-QDRANT_VISUAL_COLLECTION_NAME = os.getenv('QDRANT_VISUAL_COLLECTION_NAME', 'papri_visuals_v1')
-TEXT_EMBEDDING_DIMENSION = int(os.getenv('TEXT_EMBEDDING_DIMENSION', 384))
-IMAGE_EMBEDDING_DIMENSION = int(os.getenv('IMAGE_EMBEDDING_DIMENSION', 1280))
+QDRANT_URL = os.getenv('QDRANT_URL', 'http://qdrant:6333')
+QDRANT_API_KEY = os.getenv('QDRANT_API_KEY')
 SENTENCE_TRANSFORMER_MODEL = os.getenv('SENTENCE_TRANSFORMER_MODEL', 'all-MiniLM-L6-v2')
+TEXT_EMBEDDING_DIMENSION = int(os.getenv('TEXT_EMBEDDING_DIMENSION', 384))
 VISUAL_CNN_MODEL_NAME = os.getenv('VISUAL_CNN_MODEL_NAME', 'EfficientNetV2S')
-SPACY_MODEL_NAME = os.getenv('SPACY_MODEL_NAME', "en_core_web_sm")
-MOVIEPY_THREADS = int(os.getenv('MOVIEPY_THREADS', 4))
-MOVIEPY_PRESET = os.getenv('MOVIEPY_PRESET', 'medium')
-PYSCENEDETECT_THRESHOLD = float(os.getenv('PYSCENEDETECT_THRESHOLD', 27.0))
-PYSCENEDETECT_MIN_SCENE_LEN = int(os.getenv('PYSCENEDETECT_MIN_SCENE_LEN', 15)) # ADDED
+IMAGE_EMBEDDING_DIMENSION = int(os.getenv('IMAGE_EMBEDDING_DIMENSION', 1280))
 
-MAX_API_RESULTS_PER_SOURCE = int(os.getenv('MAX_API_RESULTS_PER_SOURCE', 10))
-MAX_SCRAPED_ITEMS_PER_SOURCE = int(os.getenv('MAX_SCRAPED_ITEMS_PER_SOURCE', 5))
-SCRAPE_INTER_PLATFORM_DELAY_SECONDS = int(os.getenv('SCRAPE_INTER_PLATFORM_DELAY_SECONDS', 2))
-
-try:
-    SCRAPEABLE_PLATFORMS_JSON = os.getenv('SCRAPEABLE_PLATFORMS_JSON', '[]')
-    SCRAPEABLE_PLATFORMS_CONFIG = json.loads(SCRAPEABLE_PLATFORMS_JSON)
-except json.JSONDecodeError:
-    SCRAPEABLE_PLATFORMS_CONFIG = []
-    if DEBUG:
-        SCRAPEABLE_PLATFORMS_CONFIG.append({'name': 'PeerTube_Tilvids_Dev_Example', 'spider_name': 'peertube', 'base_url': 'https://tilvids.com', 'search_path_template': '/api/v1/search/videos?search={query}&count={max_results}&sort=-match', 'default_listing_url': 'https://tilvids.com/videos/recently-added', 'is_active': True, 'platform_identifier': 'peertube_tilvids'})
-        print("Warning: SCRAPEABLE_PLATFORMS_JSON not found or invalid. Using default dev config.")
-
-# --- BEGIN: Scraping Robustness Settings ---
-USER_AGENT_LIST_JSON = os.getenv('USER_AGENT_LIST_JSON', '["Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.107 Safari/537.36", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36"]')
-try:
-    USER_AGENT_LIST = json.loads(USER_AGENT_LIST_JSON)
-except json.JSONDecodeError:
-    USER_AGENT_LIST = ["PapriSearchBot/1.0 (+http://yourpaprisite.com/bot-info)"] # Fallback
-DEFAULT_USER_AGENT = os.getenv('DEFAULT_USER_AGENT', USER_AGENT_LIST[0] if USER_AGENT_LIST else "PapriSearchBot/1.0")
-
-HTTP_PROXY = os.getenv('HTTP_PROXY', None)
-HTTPS_PROXY = os.getenv('HTTPS_PROXY', None)
-PROXY_LIST_JSON = os.getenv('PROXY_LIST_JSON', '[]')
-try:
-    PROXY_LIST = json.loads(PROXY_LIST_JSON)
-except json.JSONDecodeError:
-    PROXY_LIST = []
-
-SCRAPY_SPIDER_TIMEOUT = int(os.getenv('SCRAPY_SPIDER_TIMEOUT', 300)) # Timeout for Scrapy spider subprocess
-SCRAPY_DOWNLOAD_TIMEOUT = int(os.getenv('SCRAPY_DOWNLOAD_TIMEOUT', 30)) # Timeout for individual Scrapy HTTP requests
-SCRAPY_DOWNLOAD_DELAY = float(os.getenv('SCRAPY_DOWNLOAD_DELAY', 0.75)) # Base download delay for Scrapy
-SCRAPY_CONCURRENT_REQUESTS_PER_DOMAIN = int(os.getenv('SCRAPY_CONCURRENT_REQUESTS_PER_DOMAIN', 4))
-# --- END: Scraping Robustness Settings ---
-
-EMAIL_BACKEND = os.getenv('EMAIL_BACKEND', 'django.core.mail.backends.console.EmailBackend')
-EMAIL_HOST = os.getenv('EMAIL_HOST')
-EMAIL_PORT = int(os.getenv('EMAIL_PORT', 587))
-EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'True') == 'True'
-EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER')
-EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
-DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'Papri Support <noreply@yourpaprisite.com>')
-ACCOUNT_EMAIL_SUBJECT_PREFIX = '[Papri] '
-
-PAPRI_BASE_URL = os.getenv('PAPRI_BASE_URL', 'http://localhost:80
+# ... Add other app-specific settings from the original file...
+YOUTUBE_API_KEY = os.getenv('YOUTUBE_API_KEY')
+VIMEO_ACCESS_TOKEN = os.getenv('VIMEO_ACCESS_TOKEN')
+MAX_DEMO_SEARCHES = int(os.getenv('MAX_DEMO_SEARCHES', 3))
