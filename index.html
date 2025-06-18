@@ -81,12 +81,11 @@
                 <a href="#how-it-works" @click="isMobileMenuOpen = false" class="block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:bg-gray-700 hover:text-white">How It Works</a>
                 <a href="#pricing" @click="isMobileMenuOpen = false" class="block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:bg-gray-700 hover:text-white">Pricing</a>
                 <a href="#faq" @click="isMobileMenuOpen = false" class="block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:bg-gray-700 hover:text-white">FAQ</a>
-                 {% if user.is_authenticated %}
-                    <a href="{% url 'papri_app_main' %}" class="block px-3 py-2 rounded-md text-base font-medium text-green-400 hover:bg-gray-700 hover:text-white">Go to App</a>
-                {% else %}
-                    <a href="{% url 'account_login' %}" class="block px-3 py-2 rounded-md text-base font-medium text-indigo-400 hover:bg-gray-700 hover:text-white">Login</a>
-                    <a href="{% url 'account_signup' %}" class="block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:bg-gray-700 hover:text-white">Sign Up</a>
-                {% endif %}
+                    <a href="login.html" class="block px-3 py-2 rounded-md text-base font-medium text-green-400 hover:bg-gray-700 hover:text-white">Go to App</a>
+
+                    <a href="login.html" class="block px-3 py-2 rounded-md text-base font-medium text-indigo-400 hover:bg-gray-700 hover:text-white">Login</a>
+                    <a href="signup.html" class="block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:bg-gray-700 hover:text-white">Sign Up</a>
+
             </div>
         </nav>
     </header>
@@ -116,7 +115,7 @@
                     You have <strong x-text="trialSearchesLeft" class="text-indigo-400"></strong> demo searches remaining.
                 </p>
                 <p x-show="trialBlocked" x-cloak class="text-center text-red-400 mb-8">
-                    Demo limit reached. <a href="{% url 'account_signup' %}" class="underline hover:text-indigo-300">Sign up</a> for unlimited searches!
+                    Demo limit reached. <a href="signup.html" class="underline hover:text-indigo-300">Sign up</a> for unlimited searches!
                 </p>
                 
                 <div class="max-w-2xl mx-auto mb-8 flex flex-wrap justify-center gap-3" :class="{ 'trial-blocked': trialBlocked }" role="group" aria-label="Curated Demos">
@@ -359,7 +358,7 @@
                 <p class="text-lg md:text-xl text-indigo-100 mb-10 max-w-xl mx-auto">
                     Join PAPRI today. Experience the future of video discovery and editing.
                 </p>
-                <a href="url 'account_signup'"
+                <a href="signup.html"
                    class="bg-white hover:bg-gray-100 text-indigo-700 font-bold py-4 px-10 rounded-lg text-xl shadow-lg transition duration-150 transform hover:scale-105">
                     Sign Up for Papri Pro
                 </a>
