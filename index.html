@@ -103,7 +103,7 @@
                 <div class="flex flex-wrap justify-center gap-4">
                     <a href="#try-papri" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-8 rounded-lg text-lg transition duration-150 transform hover:scale-105 shadow-lg">Try Demo Now</a>
                     <a href="{% if user.is_authenticated %}{% url 'papri_app_main' %}{% else %}{% url 'account_signup' %}{% endif %}" class="bg-transparent hover:bg-indigo-500 text-indigo-300 font-semibold hover:text-white py-3 px-8 border-2 border-indigo-400 hover:border-indigo-500 rounded-lg text-lg transition duration-150 shadow-lg">
-                        {% if user.is_authenticated %}Go to App{% else %}Get Started Free{% endif %}
+                    Go to App-Get Started Free
                     </a>
                 </div>
             </div>
