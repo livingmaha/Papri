@@ -280,9 +280,6 @@
                                     class="faq-button w-full flex items-center justify-between p-6 text-left text-white hover:bg-gray-600 focus:outline-none focus-visible:ring focus-visible:ring-indigo-500 focus-visible:ring-opacity-75">
                                 <span class="text-lg font-medium">
                                     What kind of content can I search for?
-                                    Which video platforms does PAPRI support?
-                                    How does the AI Video Editor work?
-                                    Is there a free trial?
                                 </span>
                                 <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                             </button>
@@ -292,11 +289,66 @@
                              class="p-6 pt-0 text-gray-300">
                             <p>
                                 PAPRI lets you search spoken words in transcripts and visual elements via screenshot. Find topics, mentions, objects, or text in videos.
-                                We support YouTube, Vimeo, Dailymotion, PeerTube, and more, aiming for comprehensive search.
-                                Select a video or upload your own. Use text prompts (e.g., "cut first 10s," "add 'Title'") for AI-powered edits.
-                                Yes! Try core search on this page (limited demos). For full access (AI Editor, unlimited searches), a Papri Pro subscription is needed.
                         </div>
                     </div>
+
+                    <h3 id="faq-question-{{ i }}">
+                            <button @click="openFAQ = (openFAQ === {{ i }} ? null : {{ i }})" 
+                                    :aria-expanded="(openFAQ === {{ i }}).toString()" 
+                                    :aria-controls="`faq-answer-{{ i }}`"
+                                    class="faq-button w-full flex items-center justify-between p-6 text-left text-white hover:bg-gray-600 focus:outline-none focus-visible:ring focus-visible:ring-indigo-500 focus-visible:ring-opacity-75">
+                                <span class="text-lg font-medium">
+                                    Which video platforms does PAPRI support?
+                                </span>
+                                <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                            </button>
+                        </h3>
+                        <div x-show="openFAQ === {{ i }}" x-collapse x-cloak
+                             id="faq-answer-{{ i }}" role="region" :aria-labelledby="`faq-question-{{ i }}`"
+                             class="p-6 pt-0 text-gray-300">
+                            <p>
+                                We support YouTube, Vimeo, Dailymotion, PeerTube, and more, aiming for comprehensive search.
+                        </div>
+                    </div>
+
+                <h3 id="faq-question-{{ i }}">
+                            <button @click="openFAQ = (openFAQ === {{ i }} ? null : {{ i }})" 
+                                    :aria-expanded="(openFAQ === {{ i }}).toString()" 
+                                    :aria-controls="`faq-answer-{{ i }}`"
+                                    class="faq-button w-full flex items-center justify-between p-6 text-left text-white hover:bg-gray-600 focus:outline-none focus-visible:ring focus-visible:ring-indigo-500 focus-visible:ring-opacity-75">
+                                <span class="text-lg font-medium">
+                                    How does the AI Video Editor work?
+                                </span>
+                                <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                            </button>
+                        </h3>
+                        <div x-show="openFAQ === {{ i }}" x-collapse x-cloak
+                             id="faq-answer-{{ i }}" role="region" :aria-labelledby="`faq-question-{{ i }}`"
+                             class="p-6 pt-0 text-gray-300">
+                            <p>
+                                 Select a video or upload your own. Use text prompts (e.g., "cut first 10s," "add 'Title'") for AI-powered edits.
+                        </div>
+                    </div>
+
+            <h3 id="faq-question-{{ i }}">
+                            <button @click="openFAQ = (openFAQ === {{ i }} ? null : {{ i }})" 
+                                    :aria-expanded="(openFAQ === {{ i }}).toString()" 
+                                    :aria-controls="`faq-answer-{{ i }}`"
+                                    class="faq-button w-full flex items-center justify-between p-6 text-left text-white hover:bg-gray-600 focus:outline-none focus-visible:ring focus-visible:ring-indigo-500 focus-visible:ring-opacity-75">
+                                <span class="text-lg font-medium">
+                                    Is there a free trial?
+                                </span>
+                                <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                            </button>
+                        </h3>
+                        <div x-show="openFAQ === {{ i }}" x-collapse x-cloak
+                             id="faq-answer-{{ i }}" role="region" :aria-labelledby="`faq-question-{{ i }}`"
+                             class="p-6 pt-0 text-gray-300">
+                            <p>
+                                 Yes! Try core search on this page (limited demos). For full access (AI Editor, unlimited searches), a Papri Pro subscription is needed.
+                        </div>
+                    </div>
+
                 </div>
             </div>
         </section>
