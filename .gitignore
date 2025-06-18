@@ -1,1 +1,35 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
 
+# Django
+*.log
+*.pot
+*.mo
+db.sqlite3
+db.sqlite3-journal
+media/
+static/
+local_settings.py
+
+# Environment
+.env
+.env.*
+
+# IDEs and Editors
+.idea/
+.vscode/
+*.swp
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Scrapy
+.scrapy
