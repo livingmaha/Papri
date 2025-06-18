@@ -60,10 +60,10 @@
                     <a href="#how-it-works" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm font-medium" role="menuitem">How It Works</a>
                     <a href="#pricing" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm font-medium" role="menuitem">Pricing</a>
                     <a href="#faq" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm font-medium" role="menuitem">FAQ</a>
-                        <a href="{% url 'papri_app_main' %}" class="bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-4 rounded-lg transition duration-150 text-sm" role="menuitem">Go to App</a>
+                        <a href="signup.html" class="bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-4 rounded-lg transition duration-150 text-sm" role="menuitem">Go to App</a>
   
-                        <a href="{% url 'account_login' %}" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-lg transition duration-150 text-sm" role="menuitem">Login</a>
-                        <a href="{% url 'account_signup' %}" class="text-indigo-400 hover:text-white border border-indigo-400 hover:bg-indigo-500 font-semibold py-2 px-4 rounded-lg transition duration-150 text-sm" role="menuitem">Sign Up</a>
+                        <a href="login.html" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-lg transition duration-150 text-sm" role="menuitem">Login</a>
+                        <a href="signup.html" class="text-indigo-400 hover:text-white border border-indigo-400 hover:bg-indigo-500 font-semibold py-2 px-4 rounded-lg transition duration-150 text-sm" role="menuitem">Sign Up</a>
   
                 </div>
                 <div class="md:hidden">
@@ -102,7 +102,7 @@
                 </p>
                 <div class="flex flex-wrap justify-center gap-4">
                     <a href="#try-papri" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-8 rounded-lg text-lg transition duration-150 transform hover:scale-105 shadow-lg">Try Demo Now</a>
-                    <a href="{% if user.is_authenticated %}{% url 'papri_app_main' %}{% else %}{% url 'account_signup' %}{% endif %}" class="bg-transparent hover:bg-indigo-500 text-indigo-300 font-semibold hover:text-white py-3 px-8 border-2 border-indigo-400 hover:border-indigo-500 rounded-lg text-lg transition duration-150 shadow-lg">
+                    <a href="#try-papri" class="bg-transparent hover:bg-indigo-500 text-indigo-300 font-semibold hover:text-white py-3 px-8 border-2 border-indigo-400 hover:border-indigo-500 rounded-lg text-lg transition duration-150 shadow-lg">
                     Go to App-Get Started Free
                     </a>
                 </div>
