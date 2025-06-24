@@ -1,109 +1,304 @@
-/* frontend/static/css/papriapp.css */
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PAPRI App</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdn.plyr.io/3.7.8/plyr.css" />
+    <link rel="stylesheet" href="/static/css/papriapp.css">
+    <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <link rel="icon" href="/static/images/favicon.ico" type="image/x-icon">
+    <style>
+        [x-cloak] { display: none !important; }
+        .sidebar-icon { width: 1.25rem; height: 1.25rem; margin-right: 0.75rem; flex-shrink: 0; }
+        .active-nav-link { background-color: #374151; /* Tailwind gray-700 */ color: white; border-left: 3px solid #6366F1; /* Tailwind indigo-500 */}
+        .modal-overlay { background-color: rgba(17, 24, 39, 0.85); }
+        .input-spinner { border: 2px solid #4A5568; border-top-color: #6366F1; border-radius: 50%; width: 1rem; height: 1rem; animation: spin 0.8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .custom-file-input-label { cursor: pointer; display: inline-block; padding: 0.5rem 1rem; background-color: #4F46E5; color: white; border-radius: 0.375rem; font-weight: 600; transition: background-color 0.2s; }
+        .custom-file-input-label:hover { background-color: #4338CA; }
+        .custom-file-input-label:focus { outline: 2px solid #6366F1; outline-offset: 2px; }
+        .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border-width: 0; }
+    </style>
+    <script defer>
+    function papriApp() {
+        return {
+            // --- STATE ---
+            currentView: 'search',
+            isSidebarOpen: false,
+            isLoading: false,
+            authenticatedUser: null,
+            apiBaseUrl: '',
+            
+            // Search State
+            searchForm: {
+                query_text: '',
+                query_image: null,
+                query_image_name: '',
+                query_video_url: '',
+                filters: {},
+            },
+            searchLoading: false,
+            searchAttempted: false,
+            searchStatusMessage: '',
+            searchErrorMessage: false,
+            currentSearchTaskId: null,
+            pollingInterval: null,
+            searchResults: [],
+            searchTotalResults: 0,
+            searchTotalPages: 0,
+            searchCurrentPage: 1,
+            
+            // --- METHODS ---
+            
+            // Initialization
+            initializeApplication() {
+                this.handleHashChange();
+                const contextEl = document.getElementById('django-context');
+                if (contextEl) {
+                    const context = JSON.parse(contextEl.textContent || '{}');
+                    this.apiBaseUrl = context.API_BASE_URL || '/api';
+                }
+                this.checkAuthStatus();
+            },
 
-/* @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap'); */
+            handleHashChange() {
+                const hash = window.location.hash.replace('#', '');
+                if (['search', 'editor', 'history', 'settings'].includes(hash)) {
+                    this.currentView = hash;
+                } else {
+                    this.currentView = 'search';
+                }
+            },
 
-body {
-    /* font-family: 'Inter', sans-serif; */
-    /* Global styles for the app, if any */
-}
+            async checkAuthStatus() {
+                try {
+                    const response = await fetch(`${this.apiBaseUrl}/auth/status/`);
+                    const data = await response.json();
+                    if (data.isAuthenticated) {
+                        this.authenticatedUser = data.user;
+                    }
+                } catch (error) {
+                    console.error('Error checking auth status:', error);
+                }
+            },
 
-/* Sidebar specific styles if needed beyond Tailwind */
-/* .sidebar { ... } */
-/* .active-nav-link was defined in papriapp.html <style> for quick access,
-   but could be moved here for better organization */
-/*
-.active-nav-link {
-    background-color: #374151; /* Tailwind gray-700
-    color: #F9FAFB; /* Tailwind gray-50
-    border-left: 3px solid #6366F1; /* Indigo-500
-    padding-left: calc(1.5rem - 3px); /* Adjust padding for border
-}
-*/
+            // Search Methods
+            handleSearchImageFile(event) {
+                const file = event.target.files[0];
+                if (file) {
+                    this.searchForm.query_image = file;
+                    this.searchForm.query_image_name = file.name;
+                }
+            },
 
-/* Custom scrollbar styles (optional, browser support varies) */
-/* For Webkit browsers like Chrome, Safari */
-::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
-}
-::-webkit-scrollbar-track {
-    background: #2D3748; /* Tailwind gray-800 */
-}
-::-webkit-scrollbar-thumb {
-    background: #4A5568; /* Tailwind gray-600 */
-    border-radius: 4px;
-}
-::-webkit-scrollbar-thumb:hover {
-    background: #718096; /* Tailwind gray-500 */
-}
+            async initiateNewSearchTask() {
+                if (!this.searchForm.query_text && !this.searchForm.query_image) {
+                    this.searchStatusMessage = "Please enter a text query or upload an image.";
+                    this.searchErrorMessage = true;
+                    return;
+                }
+                this.searchLoading = true;
+                this.searchAttempted = true;
+                this.searchResults = [];
+                this.searchStatusMessage = "Initiating search...";
+                this.searchErrorMessage = false;
+                
+                const formData = new FormData();
+                formData.append('query_text', this.searchForm.query_text);
+                if (this.searchForm.query_image) {
+                    formData.append('query_image', this.searchForm.query_image);
+                }
 
-/* Styling for Plyr.js video player if custom overrides are needed */
-/* e.g., for modal player or editor preview player */
-/*
-#modal-video-player, #edited-video-player {
-    max-height: 70vh;
-}
-.plyr--video {
-    border-radius: 0.5rem; /* Example: rounded corners for player */
-/* box-shadow: 0 4px 15px rgba(0,0,0,0.2); */
-/* }
-*/
+                try {
+                    const response = await fetch(`${this.apiBaseUrl}/search/initiate/`, {
+                        method: 'POST',
+                        body: formData,
+                        // Add CSRF token if needed for session auth
+                    });
+                    const data = await response.json();
+                    if (response.ok) {
+                        this.currentSearchTaskId = data.id;
+                        this.searchStatusMessage = `Search started (Task ID: ${data.id.substring(0,8)}...). Polling for status.`;
+                        this.startPollingStatus(data.id);
+                    } else {
+                        throw new Error(data.error || 'Failed to start search task.');
+                    }
+                } catch (error) {
+                    console.error('Error initiating search:', error);
+                    this.searchStatusMessage = `Error: ${error.message}`;
+                    this.searchErrorMessage = true;
+                    this.searchLoading = false;
+                }
+            },
 
-/* Search result cards - if specific overrides are needed */
-/* .search-result-card { ... } */
+            startPollingStatus(taskId) {
+                if (this.pollingInterval) {
+                    clearInterval(this.pollingInterval);
+                }
+                this.pollingInterval = setInterval(() => {
+                    this.pollSearchStatus(taskId);
+                }, 3000); // Poll every 3 seconds
+            },
 
-/* Ensure form elements within the app have consistent styling if not fully covered by Tailwind */
-/* input[type="text"], input[type="url"], input[type="email"], input[type="number"], input[type="date"], textarea, select {
-    background-color: #374151; /* Tailwind gray-700 */
-/* border: 1px solid #4B5568; /* Tailwind gray-600 */
-/* color: #F9FAFB; /* Tailwind gray-50 */
-/* border-radius: 0.375rem; /* Tailwind rounded-md */
-/* padding: 0.5rem 0.75rem;
-}
-input:focus, textarea:focus, select:focus {
-    border-color: #6366F1; /* Tailwind indigo-500 */
-/* ring: 1px solid #6366F1; */
-/* box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.5); */
-/* }
-*/
+            async pollSearchStatus(taskId) {
+                try {
+                    const response = await fetch(`${this.apiBaseUrl}/search/status/${taskId}/`);
+                    const data = await response.json();
+                    this.searchStatusMessage = `Status: ${data.status.replace(/_/g, ' ')}`;
 
-/* Modal styles (overlay, content box) - Tailwind handles much of this with utility classes */
-/*
-.modal-overlay {
-    position: fixed;
-    top: 0; left: 0; right: 0; bottom: 0;
-    background-color: rgba(17, 24, 39, 0.8); /* Tailwind gray-900 with opacity */
-/* z-index: 50;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-.modal-content {
-    background-color: #1F2937; /* Tailwind gray-800 */
-/* padding: 1.5rem; */
-/* border-radius: 0.5rem; */
-/* box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04); */
-/* max-width: 90%; */
-/* max-height: 90vh; */
-/* overflow-y: auto;
-}
-*/
+                    if (data.status === 'completed' || data.status === 'partial_results') {
+                        clearInterval(this.pollingInterval);
+                        this.pollingInterval = null;
+                        this.searchStatusMessage = 'Search complete. Fetching results...';
+                        this.fetchResultsPage(1);
+                    } else if (data.status.startsWith('failed')) {
+                        clearInterval(this.pollingInterval);
+                        this.pollingInterval = null;
+                        this.searchStatusMessage = `Search failed: ${data.error_message || data.status}`;
+                        this.searchErrorMessage = true;
+                        this.searchLoading = false;
+                    }
+                } catch (error) {
+                    console.error('Error polling status:', error);
+                    clearInterval(this.pollingInterval);
+                    this.searchStatusMessage = 'Error checking search status.';
+                    this.searchErrorMessage = true;
+                    this.searchLoading = false;
+                }
+            },
 
-/* Custom spinner styles if not using Tailwind's animate-spin directly */
-/*
-.spinner {
-    border: 4px solid rgba(255, 255, 255, 0.3);
-    border-left-color: #6366F1; /* Indigo-500 */
-/* border-radius: 50%;
-    width: 24px;
-    height: 24px;
-    animation: spin 1s linear infinite;
-}
-@keyframes spin {
-    to { transform: rotate(360deg); }
-}
-*/
+            async fetchResultsPage(page) {
+                if (!this.currentSearchTaskId) return;
+                this.searchLoading = true;
 
-/* Adjust file input button styling if needed */
-/* This can be tricky as file inputs are hard to style consistently.
-   Tailwind's `file:` variant helps a lot. */
+                try {
+                    const response = await fetch(`${this.apiBaseUrl}/search/results/${this.currentSearchTaskId}/?page=${page}`);
+                    const data = await response.json();
+                    
+                    if (response.ok) {
+                        this.searchResults = data.results_data || [];
+                        this.searchTotalResults = data.count;
+                        this.searchTotalPages = data.num_pages;
+                        this.searchCurrentPage = data.current_page;
+                        this.searchStatusMessage = this.searchResults.length > 0 ? `Displaying ${this.searchResults.length} of ${data.count} results.` : 'No results found.';
+                        this.searchErrorMessage = false;
+                    } else {
+                        this.searchStatusMessage = data.message || 'Error fetching results.';
+                        this.searchErrorMessage = true;
+                    }
+                } catch (error) {
+                    console.error('Error fetching results:', error);
+                    this.searchStatusMessage = 'Failed to fetch search results.';
+                    this.searchErrorMessage = true;
+                } finally {
+                    this.searchLoading = false;
+                }
+            },
+
+            // Utility & User Methods
+            async logoutUser() {
+                // Implement logout logic, likely a POST to a Django allauth URL
+                console.log('Logging out...');
+                // Example: await fetch('/accounts/logout/', { method: 'POST', ... });
+                window.location.href = '/'; // Redirect to home after logout
+            },
+
+            formatDuration(seconds) {
+                if (!seconds) return 'N/A';
+                return new Date(seconds * 1000).toISOString().substr(11, 8);
+            },
+        };
+    }
+    </script>
+</head>
+<body class="bg-gray-900 text-gray-100 font-sans antialiased" 
+      x-data="papriApp()" 
+      @hashchange.window="handleHashChange()" 
+      x-init="initializeApplication()">
+
+    <div class="flex h-screen overflow-hidden">
+        <!-- Sidebar -->
+        <aside class="w-64 bg-gray-800 shadow-md flex-shrink-0 hidden md:flex md:flex-col overflow-y-auto">
+            <div class="p-5 border-b border-gray-700">
+                <a href="#search" @click="currentView = 'search'" class="text-2xl font-bold text-white hover:text-indigo-400">PAPRI AI</a>
+            </div>
+            <nav class="mt-4 flex-grow" aria-label="Main navigation">
+                 <a href="#search" @click="currentView = 'search'" class="flex items-center px-5 py-3 text-gray-300 hover:bg-gray-700 hover:text-white" :class="{ 'active-nav-link': currentView === 'search' }">Search</a>
+                 <a href="#editor" @click="currentView = 'editor'" class="flex items-center px-5 py-3 text-gray-300 hover:bg-gray-700 hover:text-white" :class="{ 'active-nav-link': currentView === 'editor' }">AI Video Editor</a>
+                 <a href="#history" @click="currentView = 'history'" class="flex items-center px-5 py-3 text-gray-300 hover:bg-gray-700 hover:text-white" :class="{ 'active-nav-link': currentView === 'history' }">History</a>
+                 <a href="#settings" @click="currentView = 'settings'" class="flex items-center px-5 py-3 text-gray-300 hover:bg-gray-700 hover:text-white" :class="{ 'active-nav-link': currentView === 'settings' }">Settings</a>
+            </nav>
+            <div class="mt-auto p-5 border-t border-gray-700">
+                 <div x-show="authenticatedUser" x-cloak class="mb-3">
+                    <p class="text-xs text-gray-400">Logged in as:</p>
+                    <p class="font-semibold text-sm text-white truncate" x-text="authenticatedUser.email"></p>
+                 </div>
+                <button @click="logoutUser()" class="flex items-center justify-center w-full bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-3 rounded-lg text-sm">Logout</button>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="flex-1 overflow-x-hidden overflow-y-auto bg-gray-900 p-4 sm:p-6 md:p-8">
+            <!-- Search View -->
+            <div x-show="currentView === 'search'" x-cloak>
+                <h1 class="text-3xl font-bold text-white">Video Search</h1>
+                <form @submit.prevent="initiateNewSearchTask" class="bg-gray-800 p-6 rounded-lg shadow-lg space-y-4 mt-4">
+                    <!-- Search Inputs -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label for="main-query-text" class="block text-sm font-medium text-gray-300 mb-1">Text Query:</label>
+                            <input type="text" id="main-query-text" x-model="searchForm.query_text" :disabled="searchLoading" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:ring-indigo-500 focus:border-indigo-500">
+                        </div>
+                        <div>
+                            <label for="main-query-image-input" class="block text-sm font-medium text-gray-300 mb-1">Image Query:</label>
+                            <input type="file" id="main-query-image-input" @change="handleSearchImageFile($event)" :disabled="searchLoading" class="w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100">
+                        </div>
+                    </div>
+                    <!-- Search Button -->
+                    <div class="text-center pt-2">
+                        <button type="submit" :disabled="searchLoading" class="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-bold py-2.5 px-6 rounded-md">
+                            <span x-show="!searchLoading">Search</span>
+                            <span x-show="searchLoading">Searching...</span>
+                        </button>
+                    </div>
+                </form>
+
+                <!-- Search Status & Results -->
+                <div x-show="searchStatusMessage" class="mt-4 p-3 rounded-md text-sm" :class="searchErrorMessage ? 'bg-red-800 text-red-200' : 'bg-blue-800 text-blue-200'" x-text="searchStatusMessage"></div>
+                
+                <div class="mt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                    <template x-for="result in searchResults" :key="result.id">
+                        <div class="bg-gray-800 rounded-lg shadow-lg overflow-hidden">
+                            <img :src="result.primary_source_display?.thumbnail_url || 'https://placehold.co/600x400/000000/FFFFFF?text=...'" :alt="result.title" class="w-full h-40 object-cover">
+                            <div class="p-4">
+                                <h3 class="font-semibold text-white" x-text="result.title"></h3>
+                                <p class="text-xs text-gray-400" x-text="result.primary_source_display?.platform_name"></p>
+                                <div class="mt-2">
+                                    <a :href="result.primary_source_display?.original_url" target="_blank" class="text-indigo-400 hover:underline text-sm">View Source</a>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <!-- Editor View -->
+            <div x-show="currentView === 'editor'" x-cloak>
+                <h1 class="text-3xl font-bold text-white">AI Video Editor</h1>
+                <p class="text-gray-400 mt-4">Video editing functionality will be implemented here.</p>
+            </div>
+            <!-- Other Views -->
+            <div x-show="currentView === 'history'" x-cloak><h1 class="text-3xl font-bold text-white">History</h1><p class="text-gray-400 mt-4">Your past searches will appear here.</p></div>
+            <div x-show="currentView === 'settings'" x-cloak><h1 class="text-3xl font-bold text-white">Settings</h1><p class="text-gray-400 mt-4">User settings will be available here.</p></div>
+        </main>
+    </div>
+
+    <script id="django-context" type="application/json">
+        {{ django_context_json|safe if django_context_json else '{}' }}
+    </script>
+    <script src="https://cdn.plyr.io/3.7.8/plyr.js"></script>
+
+</body>
+</html>
