@@ -1,0 +1,112 @@
+services:
+  # 1. MySQL Database
+  - type: mysql
+    name: papri-mysql-db
+    plan: free # Change to a paid plan for production
+    mysqlVersion: '8'
+
+  # 2. Redis Instance
+  - type: redis
+    name: papri-redis
+    plan: free # Change to a paid plan for production
+    maxmemoryPolicy: allkeys-lru
+
+  # 3. Web Service (Django/Gunicorn)
+  - type: web
+    name: papri-backend
+    env: python
+    plan: starter # Choose an appropriate plan
+    buildCommand: "./build.sh"
+    startCommand: "gunicorn papri_project.wsgi:application"
+    healthCheckPath: /api/auth/status/
+    envVars:
+      - fromGroup: papri-env-group
+      - key: DATABASE_URL
+        fromService:
+          type: mysql
+          name: papri-mysql-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: papri-redis
+          property: connectionString
+    autoDeploy: true
+
+  # 4. Background Workers
+  - type: worker
+    name: celery-worker-default
+    env: python
+    plan: starter
+    buildCommand: "./build.sh"
+    startCommand: "celery -A papri_project worker -l info -Q default -c 2"
+    envVars:
+      - fromGroup: papri-env-group
+      - key: DATABASE_URL
+        fromService:
+          type: mysql
+          name: papri-mysql-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: papri-redis
+          property: connectionString
+
+  - type: worker
+    name: celery-worker-ai
+    env: python
+    plan: pro # AI tasks are resource-intensive
+    buildCommand: "./build.sh"
+    startCommand: "celery -A papri_project worker -l info -Q ai_processing -c 1"
+    envVars:
+      - fromGroup: papri-env-group
+      - key: DATABASE_URL
+        fromService:
+          type: mysql
+          name: papri-mysql-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: papri-redis
+          property: connectionString
+
+  - type: worker
+    name: celery-worker-video
+    env: python
+    plan: pro
+    buildCommand: "./build.sh"
+    startCommand: "celery -A papri_project worker -l info -Q video_editing -c 1"
+    envVars:
+      - fromGroup: papri-env-group
+      - key: DATABASE_URL
+        fromService:
+          type: mysql
+          name: papri-mysql-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: papri-redis
+          property: connectionString
+
+  # 5. Cron Job for Celery Beat
+  - type: cron
+    name: celery-beat
+    env: python
+    plan: starter
+    schedule: "* * * * *" # Every minute
+    command: "celery -A papri_project beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler"
+    envVars:
+      - fromGroup: papri-env-group
+      - key: DATABASE_URL
+        fromService:
+          type: mysql
+          name: papri-mysql-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: papri-redis
+          property: connectionString
