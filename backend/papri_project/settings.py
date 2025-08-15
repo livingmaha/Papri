@@ -47,7 +47,10 @@ INSTALLED_APPS = [
     'django_celery_beat',
     'django_ratelimit',
     'drf_spectacular', # For API Docs
-    'compressor',      # For Frontend Performance
+    'compressor'
+    'cloudinary_storage',
+    'django.contrib.staticfiles',
+    'cloudinary',,      # For Frontend Performance
 
     # Local apps
     'api.apps.ApiConfig',
@@ -155,6 +158,11 @@ STATICFILES_FINDERS = (
     'django.contrib.staticfiles.finders.AppDirectoriesFinder',
     'compressor.finders.CompressorFinder',
 )
+
+# Cloudinary Media Storage
+DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
+CLOUDINARY_URL = os.getenv('CLOUDINARY_URL')
+
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'mediafiles_storage'
