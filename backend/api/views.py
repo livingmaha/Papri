@@ -177,6 +177,23 @@ class InitiateSearchView(views.APIView):
                 logger.error(f"Could not process uploaded query image: {e}", exc_info=True)
                 return Response({"error": "Could not process uploaded image."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+        image_ref_path = None
+        if query_image_file:
+            try:
+                # The path here now acts as the public_id in Cloudinary, including folders
+                user_folder = f"user_{user.id}" if user else f"session_{session_id}"
+                safe_filename = f"queryimg_{uuid.uuid4().hex}{os.path.splitext(query_image_file.name)[1]}"
+                
+                # This path will create a folder structure within Cloudinary
+                cloudinary_path = os.path.join('query_images', user_folder, safe_filename)
+                
+                # default_storage now points to Cloudinary, this will upload the file
+                saved_path = default_storage.save(cloudinary_path, query_image_file)
+                image_ref_path = saved_path # saved_path is the URL/path from Cloudinary
+            except Exception as e:
+                logger.error(f"Could not process and upload query image to Cloudinary: {e}", exc_info=True)
+                return Response({"error": "Could not process uploaded image."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
         search_task = SearchTask.objects.create(
             user=user, session_id=session_id, query_text=query_text,
             query_image_ref=image_ref_path, query_video_url=query_video_url,
