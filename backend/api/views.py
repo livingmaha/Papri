@@ -312,13 +312,17 @@ class VideoEditProjectListCreateView(generics.ListCreateAPIView):
 
         if uploaded_video_file:
             try:
+                # Define a structured path for Cloudinary
+                user_folder = f"user_{user.id}"
+                safe_filename = f"edit_upload_{uuid.uuid4().hex}{os.path.splitext(uploaded_video_file.name)[1]}"           
+                cloudinary_path = os.path.join('editor_uploads', user_folder, safe_filename)
+                saved_path = default_storage.save(cloudinary_path, uploaded_video_file)
+                uploaded_video_path_final = saved_path # This is now the Cloudinary URL/path
+                logger.info(f"User {user.id} uploaded video for editing to Cloudinary: {uploaded_video_path_final}")        
                 edit_temp_dir_name = os.path.join('user_edits_temp', str(user.id))
                 os.makedirs(os.path.join(settings.MEDIA_ROOT, edit_temp_dir_name), exist_ok=True)
                 safe_filename = f"edit_upload_{uuid.uuid4().hex}{os.path.splitext(uploaded_video_file.name)[1]}"
                 relative_path = os.path.join(edit_temp_dir_name, safe_filename)
-                saved_path = default_storage.save(relative_path, uploaded_video_file)
-                uploaded_video_path_final = saved_path
-                logger.info(f"User {user.id} uploaded video for editing: {uploaded_video_path_final}")
             except Exception as e:
                 logger.error(f"Error saving uploaded video for editing by user {user.id}: {e}", exc_info=True)
                 raise serializers.ValidationError({"uploaded_video_file": f"Failed to save uploaded video: {str(e)}"}) # Use DRF validation error
