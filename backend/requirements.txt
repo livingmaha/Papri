@@ -15,8 +15,8 @@ redis>=5.0,<5.1
 django-celery-results>=2.5,<2.6
 django-celery-beat>=2.5,<2.6
 
-# Database Connector (MySQL)
-mysqlclient>=2.1,<2.3
+# Database Connector (PostgreSQL)
+psycopg2-binary>=2.9,<2.10
 
 # HTTP Requests
 requests>=2.31,<2.32
@@ -61,7 +61,3 @@ python-dateutil>=2.8,<2.10
 # Production Web Server
 gunicorn>=21.0,<22.0
 whitenoise[brotli]>=6.6,<6.7
-
-# Cloud Media Storage
-django-cloudinary-storage
-cloudinary
