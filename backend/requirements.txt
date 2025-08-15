@@ -61,3 +61,7 @@ python-dateutil>=2.8,<2.10
 # Production Web Server
 gunicorn>=21.0,<22.0
 whitenoise[brotli]>=6.6,<6.7
+
+# Cloud Media Storage
+django-cloudinary-storage
+cloudinary
