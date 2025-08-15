@@ -97,12 +97,12 @@ ASGI_APPLICATION = 'papri_project.asgi.application'
 # --- Database ---
 DATABASES = {
     'default': {
-        'ENGINE': os.getenv('DB_ENGINE', 'django.db.backends.mysql'),
+        'ENGINE': os.getenv('DB_ENGINE', 'django.db.backends.postgresql'),
         'NAME': os.getenv('DB_NAME', 'papri_db'),
         'USER': os.getenv('DB_USER', 'papri_user'),
         'PASSWORD': os.getenv('DB_PASSWORD', 'papri_password'),
         'HOST': os.getenv('DB_HOST', 'db'), # Use service name from docker-compose
-        'PORT': os.getenv('DB_PORT', '3306'),
+        'PORT': os.getenv('DB_PORT', '5432'),
         'OPTIONS': {
             'charset': 'utf8mb4',
             'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
