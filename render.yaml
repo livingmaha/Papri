@@ -1,112 +1,147 @@
+# render.yaml - Infrastructure as Code for deploying PAPRI on Render
+
+# 1. Environment Group for Secrets
+#    Create this in the Render Dashboard (https://dashboard.render.com/env-groups)
+#    and add all variables from your backend/.env file.
+envVarGroups:
+  - name: papri-secrets
+    # envVars:
+    #   - key: DJANGO_SECRET_KEY
+    #     value: your_secret_key_here
+    #   - key: DB_NAME
+    #     value: papri_db
+    #   ... and so on for all secrets
+
+# 2. Services Definition
 services:
-  # 1. MySQL Database
-  - type: mysql
-    name: papri-mysql-db
-    plan: free # Change to a paid plan for production
-    mysqlVersion: '8'
+  # ------ Database & Cache Services ------
+  - name: papri-db
+    type: pserv # Private Service for the Database
+    env: postgres # Use Render's managed PostgreSQL
+    # Render will automatically provision and inject the DATABASE_URL env var
+    # into other services connected to this db.
+    # We will use this DATABASE_URL in the web service and workers.
+    # You can set the version and other parameters here if needed.
+    ipAllowList: [] # Limit access to other Render services by default
 
-  # 2. Redis Instance
-  - type: redis
-    name: papri-redis
-    plan: free # Change to a paid plan for production
-    maxmemoryPolicy: allkeys-lru
+  - name: papri-redis
+    type: pserv # Private Service for Redis
+    env: redis
+    # Render will inject REDIS_URL into connected services.
 
-  # 3. Web Service (Django/Gunicorn)
-  - type: web
-    name: papri-backend
-    env: python
-    plan: starter # Choose an appropriate plan
-    buildCommand: "./build.sh"
-    startCommand: "gunicorn papri_project.wsgi:application"
-    healthCheckPath: /api/auth/status/
+  # ------ Application Services ------
+  - name: papri-backend
+    type: web
+    env: docker
+    dockerContext: ./backend
+    dockerfilePath: ./backend/Dockerfile
     envVars:
-      - fromGroup: papri-env-group
+      - fromGroup: papri-secrets
       - key: DATABASE_URL
         fromService:
-          type: mysql
-          name: papri-mysql-db
+          type: pserv
+          name: papri-db
           property: connectionString
-      - key: REDIS_URL
+      - key: CELERY_BROKER_URL
         fromService:
-          type: redis
+          type: pserv
           name: papri-redis
           property: connectionString
-    autoDeploy: true
+      - key: PAPRI_PRODUCTION_MODE
+        value: "True"
+    healthCheck:
+      path: /api/auth/status/ # A lightweight endpoint to check if the app is alive
+      initialDelaySeconds: 45
+    autoDeploy: yes # Automatically deploy on push to your main branch
+    buildFilter:
+      paths:
+        - "backend/**"
+        - "render.yaml"
 
-  # 4. Background Workers
-  - type: worker
-    name: celery-worker-default
-    env: python
-    plan: starter
-    buildCommand: "./build.sh"
+  - name: papri-worker-default
+    type: worker
+    env: docker
+    dockerContext: ./backend
+    dockerfilePath: ./backend/Dockerfile
     startCommand: "celery -A papri_project worker -l info -Q default -c 2"
     envVars:
-      - fromGroup: papri-env-group
+      - fromGroup: papri-secrets
       - key: DATABASE_URL
         fromService:
-          type: mysql
-          name: papri-mysql-db
+          type: pserv
+          name: papri-db
           property: connectionString
-      - key: REDIS_URL
+      - key: CELERY_BROKER_URL
         fromService:
-          type: redis
+          type: pserv
           name: papri-redis
           property: connectionString
+      - key: PAPRI_PRODUCTION_MODE
+        value: "True"
 
-  - type: worker
-    name: celery-worker-ai
-    env: python
-    plan: pro # AI tasks are resource-intensive
-    buildCommand: "./build.sh"
+  - name: papri-worker-ai
+    type: worker
+    env: docker
+    dockerContext: ./backend
+    dockerfilePath: ./backend/Dockerfile
     startCommand: "celery -A papri_project worker -l info -Q ai_processing -c 1"
+    instanceType: Pro # AI tasks are resource-intensive, consider a more powerful instance
     envVars:
-      - fromGroup: papri-env-group
+      - fromGroup: papri-secrets
       - key: DATABASE_URL
         fromService:
-          type: mysql
-          name: papri-mysql-db
+          type: pserv
+          name: papri-db
           property: connectionString
-      - key: REDIS_URL
+      - key: CELERY_BROKER_URL
         fromService:
-          type: redis
+          type: pserv
           name: papri-redis
           property: connectionString
+      - key: PAPRI_PRODUCTION_MODE
+        value: "True"
 
-  - type: worker
-    name: celery-worker-video
-    env: python
-    plan: pro
-    buildCommand: "./build.sh"
+  - name: papri-worker-video
+    type: worker
+    env: docker
+    dockerContext: ./backend
+    dockerfilePath: ./backend/Dockerfile
     startCommand: "celery -A papri_project worker -l info -Q video_editing -c 1"
+    instanceType: Pro # Video tasks are also resource-intensive
     envVars:
-      - fromGroup: papri-env-group
+      - fromGroup: papri-secrets
       - key: DATABASE_URL
         fromService:
-          type: mysql
-          name: papri-mysql-db
+          type: pserv
+          name: papri-db
           property: connectionString
-      - key: REDIS_URL
+      - key: CELERY_BROKER_URL
         fromService:
-          type: redis
+          type: pserv
           name: papri-redis
           property: connectionString
+      - key: PAPRI_PRODUCTION_MODE
+        value: "True"
 
-  # 5. Cron Job for Celery Beat
-  - type: cron
-    name: celery-beat
-    env: python
-    plan: starter
-    schedule: "* * * * *" # Every minute
+  # ------ Scheduled Task Service ------
+  - name: papri-beat
+    type: cron
+    env: docker
+    dockerContext: ./backend
+    dockerfilePath: ./backend/Dockerfile
+    schedule: "* * * * *" # Run every minute to check for scheduled tasks
     command: "celery -A papri_project beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler"
     envVars:
-      - fromGroup: papri-env-group
+      - fromGroup: papri-secrets
       - key: DATABASE_URL
         fromService:
-          type: mysql
-          name: papri-mysql-db
+          type: pserv
+          name: papri-db
           property: connectionString
-      - key: REDIS_URL
+      - key: CELERY_BROKER_URL
         fromService:
-          type: redis
+          type: pserv
           name: papri-redis
           property: connectionString
+      - key: PAPRI_PRODUCTION_MODE
+        value: "True"
