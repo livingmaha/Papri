@@ -35,6 +35,8 @@ INSTALLED_APPS = [
     'whitenoise.runserver_nostatic',  # Must be before staticfiles
     'django.contrib.staticfiles',
     'django.contrib.sites',
+    'cloudinary_storage', # Add before staticfiles
+    'cloudinary',
 
     # Third-party apps
     'rest_framework',
@@ -165,7 +167,11 @@ CLOUDINARY_URL = os.getenv('CLOUDINARY_URL')
 
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 MEDIA_URL = '/media/'
-MEDIA_ROOT = BASE_DIR / 'mediafiles_storage'
+
+MEDIA_ROOTMEDIA_URL = '/papri/media/' # This can be a virtual path
+DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage' = BASE_DIR / 'mediafiles_storage'
+
+CLOUDINARY_URL = os.getenv('CLOUDINARY_URL')
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
