@@ -1,8 +1,8 @@
-# backend/api/views.py
 import os
 import uuid
 import logging
 import json # Added for papri_app_view context
+from cloudinary.uploader import upload
 
 from django.conf import settings
 from django.contrib.auth.models import User
@@ -72,6 +72,7 @@ def auth_status_view(request):
 @method_decorator(ratelimit(key=settings.RATELIMIT_KEYS.get('auth_actions', 'ip'), group='auth_actions', rate=settings.RATELIMIT_DEFAULTS.get('auth_actions', '10/h'), block=True), name='post')
 class ActivateAccountView(views.APIView):
     permission_classes = [permissions.AllowAny]
+    parser_classes = [MultiPartParser, FormParser]
 
     def post(self, request, *args, **kwargs):
         serializer = ActivateAccountSerializer(data=request.data)
