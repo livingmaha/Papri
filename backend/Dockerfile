@@ -10,10 +10,11 @@ ENV PYTHONUNBUFFERED 1
 WORKDIR /app
 
 # Install system dependencies that might be needed by Python packages
-# For example, mysqlclient requires libmysqlclient-dev
+# For psycopg2, we need libpq-dev and postgresql-client for pg_isready
 RUN apt-get update && apt-get install -y \
     build-essential \
-    libmysqlclient-dev \
+    libpq-dev \
+    postgresql-client \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy the requirements file and install dependencies
